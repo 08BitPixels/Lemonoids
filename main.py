@@ -8,10 +8,13 @@ from constants import *
 # PYGAME SETUP
 pygame.init()
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
+clock = pygame.time.Clock()
+
+pygame.mouse.set_visible(False)
 pygame.display.set_icon(pygame.image.load('Images/Icon.ico'))
 pygame.display.set_caption('Lemonoids | INITIALISING...')
-pygame.mouse.set_visible(False)
-clock = pygame.time.Clock()
+screen.blit(pygame.transform.scale(pygame.image.load('Images/Cover.png'), (WIDTH, HEIGHT)), (0, 0))
+pygame.display.update()
 
 class Game:
 
@@ -28,7 +31,8 @@ class Game:
 		self.explosion_frames = [pygame.transform.scale_by(pygame.transform.rotate(pygame.image.load(f'Images/Explosion/God-Rays.png'), step), 0.75).convert_alpha() for step in range(0, int(360 / 12), 2)]
 
 		self.player = pygame.sprite.GroupSingle(Player(self))
-		self.crosshair = pygame.sprite.GroupSingle(Crosshair(self.player.sprite.ship_index))
+		self.crosshair = pygame.sprite.GroupSingle(Crosshair(self.player.sprite.ship_index, self))
+		self.health_bars = pygame.sprite.Group()
 		self.lemonoids = pygame.sprite.Group(Lemonoid(angle = randint(0, 360), max_health = 20, move_speed = 75, size = 1, game = self))
 		self.explosions = pygame.sprite.Group()
 
@@ -145,7 +149,7 @@ class Player(pygame.sprite.Sprite):
 
 class Crosshair(pygame.sprite.Sprite):
 
-	def __init__(self, type: int) -> None:
+	def __init__(self, type: int, game: Game) -> None:
 
 		super().__init__()
 		
@@ -158,6 +162,7 @@ class Crosshair(pygame.sprite.Sprite):
 		self.rect = self.image.get_rect(center = (0, 0))
 		self.pos = pygame.math.Vector2()
 
+		self.game = game
 		self.ROTATE_SPEED = 500
 		self.angle = 0
 
@@ -165,10 +170,14 @@ class Crosshair(pygame.sprite.Sprite):
 
 		self.rect.center = self.pos
 		self.image = self.images[self.focussed]
-		self.image = pygame.transform.rotate(self.images[self.focussed], self.angle).convert_alpha()
-		self.rect = self.image.get_rect(center = self.pos)
 		self.input()
-		if self.focussed: self.rotate(dt)
+
+		if self.focussed: 
+			
+			self.rotate(dt)
+			self.image = pygame.transform.rotate(self.images[self.focussed], self.angle).convert_alpha()
+
+		self.rect = self.image.get_rect(center = self.pos)
 
 	def input(self) -> None:
 
@@ -402,6 +411,22 @@ class Explosion(pygame.sprite.Sprite):
 		self.image.set_alpha(self.alpha)
 		if self.alpha <= 0: self.kill()
 
+class Health_Bar(pygame.sprite.Sprite):
+
+	def __init__(self, parent: Lemonoid) -> None:
+
+		super().__init__()
+		self.image = None
+		self.rect = None
+
+		self.parent = parent
+		self.MAX_HEALTH = self.parent.MAX_HEALTH
+		self.health = self.parent.health
+
+	def update(self, dt: float | int) -> None:
+
+		self.health = self.parent.health
+
 def main():
 
 	game = Game()
@@ -410,6 +435,7 @@ def main():
 	lemonoids = game.lemonoids
 	explosions = game.explosions
 	crosshair = game.crosshair
+	health_bars = game.health_bars
 
 	previous_time = time()
 	while True:
@@ -429,7 +455,9 @@ def main():
 				if event.type == game.LEMONOID_TIMER:
 
 					angle = randint(0, 360)
-					lemonoids.add(Lemonoid(angle = angle, max_health = 20, move_speed = 75, size = 1, game = game))
+					new_lemonoid = Lemonoid(angle = angle, max_health = 20, move_speed = 75, size = 1, game = game)
+					lemonoids.add(new_lemonoid)
+					health_bars.add(Health_Bar(parent = new_lemonoid))
 
 				if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
 
@@ -459,17 +487,21 @@ def main():
 				game.shake(game.shake_offsets[0])
 				game.shake_offsets.pop(0)
 
+			# Health Bars
+			health_bars.update(dt)
+			health_bars.draw(screen)
+
 			# Explosions
-			explosions.draw(screen)
 			explosions.update(dt)
+			explosions.draw(screen)
 
 			# Player
-			player.draw(screen)
 			player.update(dt)
-
+			player.draw(screen)
+			
 			# Lemonoids
-			lemonoids.draw(screen)
 			lemonoids.update(dt)
+			lemonoids.draw(screen)
 
 			# Lasers
 			lasers_fired.draw(screen)
