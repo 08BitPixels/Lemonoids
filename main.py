@@ -4,7 +4,7 @@ from time import time
 from math import atan2, cos, sin, degrees, radians, pi
 from random import randint, uniform
 from constants import *
-
+# hello world
 # PYGAME SETUP
 pygame.init()
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
