@@ -4,7 +4,7 @@ from time import time
 from math import atan2, cos, sin, degrees, radians, pi
 from random import randint, uniform
 from constants import *
-# hello world
+
 # PYGAME SETUP
 pygame.init()
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -32,13 +32,12 @@ class Game:
 
 		self.player = pygame.sprite.GroupSingle(Player(self))
 		self.crosshair = pygame.sprite.GroupSingle(Crosshair(self.player.sprite.ship_index, self))
-		self.health_bars = pygame.sprite.Group()
 		self.lemonoids = pygame.sprite.Group(Lemonoid(angle = randint(0, 360), max_health = 20, move_speed = 75, size = 1, game = self))
 		self.explosions = pygame.sprite.Group()
 
 		self.LEMONOID_FREQUENCY = 5000
 		self.LEMONOID_TIMER = pygame.USEREVENT + 0
-		#pygame.time.set_timer(self.LEMONOID_TIMER, self.LEMONOID_FREQUENCY)
+		pygame.time.set_timer(self.LEMONOID_TIMER, self.LEMONOID_FREQUENCY)
 
 		end_time = time()
 		print(f'Game Initialised in {round(end_time - start_time, 3)}s')
@@ -261,10 +260,14 @@ class Lemonoid(pygame.sprite.Sprite):
 		self.colliding = False
 		self.size = size
 
+		self.health_bar = pygame.sprite.GroupSingle(Health_Bar(offset = (0, 0), parent = self))
+
 	def update(self, dt: float | int) -> None:
 
 		self.rect.center = self.pos
 		self.image = self.og_image
+		self.health_bar.update(dt)
+		self.health_bar.draw(screen)
 		self.move(dt)
 		self.rotate(dt)
 		self.wrap_around()
@@ -366,6 +369,7 @@ class Lemonoid(pygame.sprite.Sprite):
 				Lemonoid(pos = self.pos, angle = new_direction + 240, max_health = 8 if self.size == (1 / 2.5) else 1, move_speed = self.MOVE_SPEED * 1.5, size = self.size, game = self.game)
 			)
 			
+			self.health_bar.empty()
 			self.kill()
 
 class Explosion(pygame.sprite.Sprite):
@@ -413,19 +417,43 @@ class Explosion(pygame.sprite.Sprite):
 
 class Health_Bar(pygame.sprite.Sprite):
 
-	def __init__(self, parent: Lemonoid) -> None:
+	def __init__(self, offset: tuple, parent: Lemonoid) -> None:
 
 		super().__init__()
-		self.image = None
-		self.rect = None
+		self.image = pygame.image.load('Images/Health Bar/Base.png').convert_alpha()
+		self.rect = self.image.get_rect(center = (parent.pos.x + offset[0], parent.pos.y + offset[1]))
+		self.pos = pygame.math.Vector2(self.rect.center)
+		self.segments = pygame.sprite.Group(Health_Bar_Segment(type = 'Empty', parent = self), Health_Bar_Segment(type = 'Full', parent = self))
 
 		self.parent = parent
+		self.offset = offset
+		self.pos = (self.parent.pos.x + self.offset[0], self.parent.pos.y + self.offset[1])
 		self.MAX_HEALTH = self.parent.MAX_HEALTH
 		self.health = self.parent.health
 
 	def update(self, dt: float | int) -> None:
 
 		self.health = self.parent.health
+		self.pos = (self.parent.pos.x + self.offset[0], self.parent.pos.y + self.offset[1])
+		self.rect.center = self.pos
+		self.segments.update(dt)
+		self.segments.draw(screen)
+
+class Health_Bar_Segment(pygame.sprite.Sprite):
+	
+	def __init__(self, type: str, parent: Health_Bar) -> None:
+
+		super().__init__()
+		self.image = pygame.image.load(f'Images/Health Bar/{type}.png').convert_alpha()
+		self.rect = self.image.get_rect(center = parent.pos)
+		self.pos = pygame.math.Vector2(self.rect.center)
+
+		self.parent = parent
+
+	def update(self, dt: float | int) -> None:
+
+		self.pos = self.parent.pos
+		self.rect.center = self.pos
 
 def main():
 
@@ -435,7 +463,6 @@ def main():
 	lemonoids = game.lemonoids
 	explosions = game.explosions
 	crosshair = game.crosshair
-	health_bars = game.health_bars
 
 	previous_time = time()
 	while True:
@@ -457,39 +484,16 @@ def main():
 					angle = randint(0, 360)
 					new_lemonoid = Lemonoid(angle = angle, max_health = 20, move_speed = 75, size = 1, game = game)
 					lemonoids.add(new_lemonoid)
-					health_bars.add(Health_Bar(parent = new_lemonoid))
-
-				if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
-
-					game.shake_offset = (-cos(game.player.sprite.angle) * 16, sin(game.player.sprite.angle) * 16)
-
-					for i in range(16): game.shake_offsets.append((1, 1))
-					for i in range(16): game.shake_offsets.append((-1, -1))
-					game.shake_offsets.append((0, 0))
-
-					'''game.shake_offsets.append((-1.8, -1.8))
-					for i in range(8): game.shake_offsets.append((1, 1))
-
-					for i in range(16):
-						
-						game.shake_offsets.append((uniform(-0.5, -0.8), uniform(-0.5, -0.8)))
-						for i in range(8): game.shake_offsets.append((1, 1))
-
-					game.shake_offsets.append((0, 0))'''
 
 		screen.fill(BG_COLOUR)
 
 		if game.get_state() == game.S_PLAY:
 
-			# Game
+			# Game Shake
 			if len(game.shake_offsets) > 0:
 
 				game.shake(game.shake_offsets[0])
 				game.shake_offsets.pop(0)
-
-			# Health Bars
-			health_bars.update(dt)
-			health_bars.draw(screen)
 
 			# Explosions
 			explosions.update(dt)
@@ -500,8 +504,8 @@ def main():
 			player.draw(screen)
 			
 			# Lemonoids
-			lemonoids.update(dt)
 			lemonoids.draw(screen)
+			lemonoids.update(dt)
 
 			# Lasers
 			lasers_fired.draw(screen)
