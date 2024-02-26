@@ -1,8 +1,9 @@
 ========== LEMONOIDS ==========
 
-- Use WASD to move.
-- Click to shoot.
-- Avoid the Lemonoids!
+- Use the menu to change the model of your ship.
+- Use [WASD] to move your ship.
+- [LEFT MOUSE BUTTON] / [SPACE] to shoot.
+- Destroy + Avoid the Lemonoids at all costs!
 
 =========== CREDITS ===========
 
