@@ -233,7 +233,7 @@ class Laser(pygame.sprite.Sprite):
 		
 class Lemonoid(pygame.sprite.Sprite):
 
-	def __init__(self, angle: int, max_health: int, move_speed: int, size: int, game: Game, pos: tuple = None) -> None:
+	def __init__(self, angle: int, max_health: int, move_speed: int, size: int | float, game: Game, pos: tuple = None) -> None:
 
 		super().__init__()
 
@@ -260,7 +260,7 @@ class Lemonoid(pygame.sprite.Sprite):
 		self.colliding = False
 		self.size = size
 
-		self.health_bar = pygame.sprite.GroupSingle(Health_Bar(offset = (0, 0), parent = self))
+		self.health_bar = pygame.sprite.GroupSingle(Health_Bar(offset = (0, 0), size = self.size, parent = self))
 
 	def update(self, dt: float | int) -> None:
 
@@ -420,7 +420,7 @@ class Explosion(pygame.sprite.Sprite):
 
 class Health_Bar(pygame.sprite.Sprite):
 
-	def __init__(self, offset: tuple, parent: Lemonoid) -> None:
+	def __init__(self, offset: tuple, size: int | float, parent: Lemonoid) -> None:
 
 		super().__init__()
 
@@ -431,10 +431,10 @@ class Health_Bar(pygame.sprite.Sprite):
 		self.health = self.parent.health
 		self.health_percent = self.health / self.MAX_HEALTH
 
-		self.image = pygame.image.load('Images/Health Bar/Base.png').convert_alpha()
+		self.image = pygame.transform.scale_by(pygame.image.load('Images/Health Bar/Base.png'), size).convert_alpha()
 		self.rect = self.image.get_rect(center = (parent.pos.x + offset[0], parent.pos.y + offset[1]))
 		self.pos = pygame.math.Vector2(self.rect.center)
-		self.segment = pygame.sprite.GroupSingle(Health_Bar_Segment(parent = self))
+		self.segment = pygame.sprite.GroupSingle(Health_Bar_Segment(size = size, parent = self))
 
 	def update(self, dt: float | int) -> None:
 
@@ -445,30 +445,33 @@ class Health_Bar(pygame.sprite.Sprite):
 
 class Health_Bar_Segment(pygame.sprite.Sprite):
 	
-	def __init__(self, parent: Health_Bar) -> None:
+	def __init__(self, size: int | tuple, parent: Health_Bar) -> None:
 
 		super().__init__()
 
 		self.parent = parent
+		self.size = size
 
-		self.full_image = pygame.image.load('Images/Health Bar/Full.png').convert_alpha()
-		self.empty_image = pygame.image.load('Images/Health Bar/Empty.png').convert_alpha()
+		self.full_image = pygame.transform.scale_by(pygame.image.load('Images/Health Bar/Full.png'), size).convert_alpha()
+		self.empty_image = pygame.transform.scale_by(pygame.image.load('Images/Health Bar/Empty.png'), size).convert_alpha()
 		self.images = [self.full_image, self.empty_image]
 		self.image_index = 0
 
 		self.image = self.images[self.image_index]
-		self.rect = self.image.get_rect(center = (self.parent.pos.x + self.image.get_width() / 2, self.parent.pos.y))
-		self.pos = pygame.math.Vector2(self.rect.center)
+		self.rect = self.image.get_rect(center = ((self.parent.rect.topleft[0] + self.image.get_width() + 2) - self.image.get_width() * (((1 - self.parent.health_percent) * 2) % 1), self.parent.pos.y))
+		self.pos = pygame.math.Vector2(self.rect.topleft)
 
 	def update(self, dt: float | int) -> None:
 
-		self.pos.x = (self.parent.pos.x - self.image.get_width() / 2) + self.image.get_width() * self.parent.health_percent
-		self.pos.y = self.parent.pos.y
+		self.pos.x = (self.parent.rect.topleft[0] + self.image.get_width() + (2 * self.size)) - self.image.get_width() * (((1 - self.parent.health_percent) * 2) % 1)
+		self.pos.y = self.parent.rect.topleft[1]
 
-		self.image_index = round(1 - self.parent.health_percent)
+		if self.parent.health_percent < 1 / self.parent.MAX_HEALTH: self.pos.x = self.parent.rect.topleft[0] + (2 * self.size) 
+		if self.parent.health_percent > 0.5: self.image_index = 0
+		if self.parent.health_percent <= 0.5: self.image_index = 1
 
 		self.image = self.images[self.image_index]
-		self.rect = self.image.get_rect(center = self.pos)
+		self.rect = self.image.get_rect(topleft = self.pos)
 
 def main():
 
@@ -497,7 +500,7 @@ def main():
 				if event.type == game.LEMONOID_TIMER:
 
 					angle = randint(0, 360)
-					new_lemonoid = Lemonoid(angle = angle, max_health = 20, move_speed = 75, size = 1, game = game)
+					new_lemonoid = Lemonoid(angle = angle, max_health = 50, move_speed = 75, size = 1, game = game)
 					lemonoids.add(new_lemonoid)
 
 		screen.fill(BG_COLOUR)
