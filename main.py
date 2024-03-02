@@ -268,6 +268,8 @@ class Lemonoid(pygame.sprite.Sprite):
 		self.image = self.og_image
 		self.health_bar.update(dt)
 		self.health_bar.draw(screen)
+		self.health_bar.sprite.segment.update(dt)
+		self.health_bar.sprite.segment.draw(screen)
 		self.move(dt)
 		self.rotate(dt)
 		self.wrap_around()
@@ -369,6 +371,7 @@ class Lemonoid(pygame.sprite.Sprite):
 				Lemonoid(pos = self.pos, angle = new_direction + 240, max_health = 8 if self.size == (1 / 2.5) else 1, move_speed = self.MOVE_SPEED * 1.5, size = self.size, game = self.game)
 			)
 			
+			self.health_bar.sprite.segment.empty()
 			self.health_bar.empty()
 			self.kill()
 
@@ -420,40 +423,52 @@ class Health_Bar(pygame.sprite.Sprite):
 	def __init__(self, offset: tuple, parent: Lemonoid) -> None:
 
 		super().__init__()
-		self.image = pygame.image.load('Images/Health Bar/Base.png').convert_alpha()
-		self.rect = self.image.get_rect(center = (parent.pos.x + offset[0], parent.pos.y + offset[1]))
-		self.pos = pygame.math.Vector2(self.rect.center)
-		self.segments = pygame.sprite.Group(Health_Bar_Segment(type = 'Empty', parent = self), Health_Bar_Segment(type = 'Full', parent = self))
 
 		self.parent = parent
 		self.offset = offset
 		self.pos = (self.parent.pos.x + self.offset[0], self.parent.pos.y + self.offset[1])
 		self.MAX_HEALTH = self.parent.MAX_HEALTH
 		self.health = self.parent.health
+		self.health_percent = self.health / self.MAX_HEALTH
+
+		self.image = pygame.image.load('Images/Health Bar/Base.png').convert_alpha()
+		self.rect = self.image.get_rect(center = (parent.pos.x + offset[0], parent.pos.y + offset[1]))
+		self.pos = pygame.math.Vector2(self.rect.center)
+		self.segment = pygame.sprite.GroupSingle(Health_Bar_Segment(parent = self))
 
 	def update(self, dt: float | int) -> None:
 
 		self.health = self.parent.health
-		self.pos = (self.parent.pos.x + self.offset[0], self.parent.pos.y + self.offset[1])
+		self.health_percent = self.health / self.MAX_HEALTH
+		self.pos = pygame.math.Vector2((self.parent.pos.x + self.offset[0], self.parent.pos.y + self.offset[1]))
 		self.rect.center = self.pos
-		self.segments.update(dt)
-		self.segments.draw(screen)
 
 class Health_Bar_Segment(pygame.sprite.Sprite):
 	
-	def __init__(self, type: str, parent: Health_Bar) -> None:
+	def __init__(self, parent: Health_Bar) -> None:
 
 		super().__init__()
-		self.image = pygame.image.load(f'Images/Health Bar/{type}.png').convert_alpha()
-		self.rect = self.image.get_rect(center = parent.pos)
-		self.pos = pygame.math.Vector2(self.rect.center)
 
 		self.parent = parent
 
+		self.full_image = pygame.image.load('Images/Health Bar/Full.png').convert_alpha()
+		self.empty_image = pygame.image.load('Images/Health Bar/Empty.png').convert_alpha()
+		self.images = [self.full_image, self.empty_image]
+		self.image_index = 0
+
+		self.image = self.images[self.image_index]
+		self.rect = self.image.get_rect(center = (self.parent.pos.x + self.image.get_width() / 2, self.parent.pos.y))
+		self.pos = pygame.math.Vector2(self.rect.center)
+
 	def update(self, dt: float | int) -> None:
 
-		self.pos = self.parent.pos
-		self.rect.center = self.pos
+		self.pos.x = (self.parent.pos.x - self.image.get_width() / 2) + self.image.get_width() * self.parent.health_percent
+		self.pos.y = self.parent.pos.y
+
+		self.image_index = round(1 - self.parent.health_percent)
+
+		self.image = self.images[self.image_index]
+		self.rect = self.image.get_rect(center = self.pos)
 
 def main():
 
