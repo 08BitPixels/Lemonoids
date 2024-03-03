@@ -446,7 +446,9 @@ class Health_Bar(pygame.sprite.Sprite):
 
 	def change_colour(self) -> None:
 
-		new_colour = (255 * (1 - self.health_percent), 255 * self.health_percent, 0)
+		if self.health_percent > 0.5: new_colour = ((255 * (1 - self.health_percent)) * 2, 255, 0)
+		if self.health_percent <= 0.5: new_colour = (255, (255 * self.health_percent) * 2, 0)
+
 		array = pygame.PixelArray(self.image)
 		array.replace(self.colour, new_colour)
 		array.close()
@@ -492,7 +494,9 @@ class Health_Bar_Segment(pygame.sprite.Sprite):
 
 	def change_colour(self) -> None:
 
-		new_colour = (255 * (1 - self.parent.health_percent), 255 * self.parent.health_percent, 0)
+		if self.parent.health_percent > 0.5: new_colour = ((255 * (1 - self.parent.health_percent)) * 2, 255, 0)
+		if self.parent.health_percent <= 0.5: new_colour = (255, (255 * self.parent.health_percent) * 2, 0)
+
 		array = pygame.PixelArray(self.image)
 		array.replace(self.colour, new_colour)
 		array.close()
