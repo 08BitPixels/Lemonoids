@@ -1,8 +1,10 @@
 import pygame
+
 from sys import exit
 from time import time
 from math import atan2, cos, sin, degrees, radians, pi
 from random import randint, uniform
+
 from constants import *
 
 # PYGAME SETUP
@@ -35,7 +37,7 @@ class Game:
 		self.lemonoids = pygame.sprite.Group(Lemonoid(angle = randint(0, 360), max_health = 20, move_speed = 75, size = 1, game = self))
 		self.explosions = pygame.sprite.Group()
 
-		self.LEMONOID_FREQUENCY = 5000
+		self.LEMONOID_FREQUENCY = 10000
 		self.LEMONOID_TIMER = pygame.USEREVENT + 0
 		pygame.time.set_timer(self.LEMONOID_TIMER, self.LEMONOID_FREQUENCY)
 
@@ -73,7 +75,8 @@ class Player(pygame.sprite.Sprite):
 		self.ACCELERATION_VEL = 0.975
 		self.SPEED = 20
 		self.FIRE_RATE = 0
-		self.FIRE_RATES = {0: 5} #ship index: fire rate
+		self.FIRE_RATES = {0: 2}
+		self.ACCURACIES = {0: 1.0} #ship index: fire rate
 		self.x_vel = 0
 		self.y_vel = 0
 		self.angle = 0
@@ -137,7 +140,7 @@ class Player(pygame.sprite.Sprite):
 		elif self.fire_buffer == 0: 
 			
 			if SFX: self.shoot_sfx.play()
-			self.lasers_fired.add(Laser(start_pos = self.pos, angle = self.angle, laser_index = self.ship_index, game = self.game))
+			self.lasers_fired.add(Laser(start_pos = self.pos, angle = self.angle + uniform(-self.ACCURACIES[self.ship_index], self.ACCURACIES[self.ship_index]), laser_index = self.ship_index, game = self.game))
 
 		self.fire_buffer -= round(100 * dt)
 
@@ -192,18 +195,17 @@ class Laser(pygame.sprite.Sprite):
 
 		super().__init__()
 		
-		self.laser_index = laser_index
-
-		self.image = pygame.transform.rotate(pygame.image.load(f'Images/Laser/Laser{self.laser_index}.png'), angle).convert_alpha()
-		self.hit_image = pygame.transform.rotate(pygame.image.load(f'Images/Laser/Hit.png'), angle).convert_alpha()
-
-		self.rect = self.image.get_rect(center = start_pos)
-		self.pos = pygame.math.Vector2(self.rect.center)
-
 		self.game = game
 		self.ANGLE = angle
 		self.SPEED = 1000
 		self.collided = False
+		self.laser_index = laser_index
+
+		self.image = pygame.transform.rotate(pygame.image.load(f'Images/Laser/Laser{self.laser_index}.png'), self.ANGLE).convert_alpha()
+		self.hit_image = pygame.transform.rotate(pygame.image.load(f'Images/Laser/Hit.png'), self.ANGLE).convert_alpha()
+
+		self.rect = self.image.get_rect(center = start_pos)
+		self.pos = pygame.math.Vector2(self.rect.center)
 
 	def update(self, dt: int | float) -> None:
 
@@ -237,16 +239,6 @@ class Lemonoid(pygame.sprite.Sprite):
 
 		super().__init__()
 
-		self.og_image = pygame.transform.scale_by(pygame.transform.rotate(pygame.image.load('Images/Lemonoid/Lemonoid.png'), angle), size).convert_alpha()
-		self.image = self.og_image
-		if size == 1: self.rect = self.image.get_rect(center = (CENTER_X + cos(radians(angle)) * WIDTH, CENTER_Y - sin(radians(angle)) * WIDTH))
-		elif size != 1: self.rect = self.image.get_rect(center = pos)
-		self.pos = pygame.math.Vector2(self.rect.center)
-
-		self.hit_sfx = pygame.mixer.Sound('Audio/SFX/Lemonoid/Hit.wav')
-		self.explosion_sfx = pygame.mixer.Sound('Audio/SFX/Lemonoid/Explosion.wav')
-		self.explosion_sfx_2 = pygame.mixer.Sound('Audio/SFX/Lemonoid/Explosion2.wav')
-
 		self.game = game
 		self.MOVE_SPEED = move_speed
 		self.ROTATE_SPEED = 100 / size
@@ -259,16 +251,29 @@ class Lemonoid(pygame.sprite.Sprite):
 		self.colliding = False
 		self.size = size
 
-		self.health_bar = pygame.sprite.GroupSingle(Health_Bar(offset = (0, 0), size = self.size, parent = self))
+		self.og_image = pygame.transform.scale_by(pygame.transform.rotate(pygame.image.load('Images/Lemonoid/Lemonoid.png'), self.angle), self.size).convert_alpha()
+		self.image = self.og_image
+		if self.size == 1: self.rect = self.image.get_rect(center = (CENTER_X + cos(radians(self.angle)) * WIDTH, CENTER_Y - sin(radians(self.angle)) * WIDTH))
+		elif self.size != 1: self.rect = self.image.get_rect(center = pos)
+		self.pos = pygame.math.Vector2(self.rect.center)
+
+		self.hit_sfx = pygame.mixer.Sound('Audio/SFX/Lemonoid/Hit.wav')
+		self.explosion_sfx = pygame.mixer.Sound('Audio/SFX/Lemonoid/Explosion.wav')
+		self.explosion_sfx_2 = pygame.mixer.Sound('Audio/SFX/Lemonoid/Explosion2.wav')
+
+		self.health_bar = pygame.sprite.GroupSingle()
+		if self.size != (1 / 2 / 2 / 2): self.health_bar.add(Health_Bar(offset = (0, 0) if self.size != (1 / 2 / 2) else (0, -50), size = self.size if self.size > 0.5 else 0.5, parent = self))
 
 	def update(self, dt: float | int) -> None:
 
 		self.rect.center = self.pos
 
-		self.health_bar.update()
-		self.health_bar.draw(screen)
-		self.health_bar.sprite.segment.update()
-		self.health_bar.sprite.segment.draw(screen)
+		if self.size != (1 / 2 / 2 / 2):
+
+			self.health_bar.update()
+			self.health_bar.draw(screen)
+			self.health_bar.sprite.segment.update()
+			self.health_bar.sprite.segment.draw(screen)
 
 		self.move(dt)
 		self.rotate(dt)
@@ -336,7 +341,7 @@ class Lemonoid(pygame.sprite.Sprite):
 			array.replace((247, 255, 0), (255, 255, 255))
 			array.close()
 		
-		elif self.health <= 0: self.death()
+		if self.health <= 0: self.death()
 
 	def death(self) -> None:
 
@@ -353,10 +358,10 @@ class Lemonoid(pygame.sprite.Sprite):
 			self.game.explosions.add(Explosion(type = 'Flash', pos = self.pos, game = self.game))
 			# score + 25
 
-		self.size /= 2.5
+		self.size /= 2
 		self.shrink(self.size)
 
-		if self.size < (1 / 2.5 / 2.5):
+		if self.size < (1 / 2 / 2 / 2):
 
 			# score + 5
 			self.kill()
@@ -365,13 +370,16 @@ class Lemonoid(pygame.sprite.Sprite):
 
 			new_direction = self.DIRECTION + randint(0, 180)
 			self.game.lemonoids.add(
-				Lemonoid(pos = self.pos, angle = new_direction, max_health = 8 if self.size == (1 / 2.5) else 1, move_speed = self.MOVE_SPEED * 1.5, size = self.size, game = self.game),
-				Lemonoid(pos = self.pos, angle = new_direction + 120, max_health = 8 if self.size == (1 / 2.5) else 1, move_speed = self.MOVE_SPEED * 1.5, size = self.size, game = self.game),
-				Lemonoid(pos = self.pos, angle = new_direction + 240, max_health = 8 if self.size == (1 / 2.5) else 1, move_speed = self.MOVE_SPEED * 1.5, size = self.size, game = self.game)
+				Lemonoid(pos = self.pos, angle = new_direction, max_health = 8 if self.size == (1 / 2) else 4 if self.size == (1 / 2 / 2) else 1, move_speed = self.MOVE_SPEED * 1.5, size = self.size, game = self.game),
+				Lemonoid(pos = self.pos, angle = new_direction + 120, max_health = 8 if self.size == (1 / 2) else 4 if self.size == (1 / 2 / 2) else 1, move_speed = self.MOVE_SPEED * 1.5, size = self.size, game = self.game),
+				Lemonoid(pos = self.pos, angle = new_direction + 240, max_health = 8 if self.size == (1 / 2) else 4 if self.size == (1 / 2 / 2) else 1, move_speed = self.MOVE_SPEED * 1.5, size = self.size, game = self.game)
 			)
 			
-			self.health_bar.sprite.segment.empty()
-			self.health_bar.empty()
+			if self.size != (1 / 2 / 2 / 2):
+
+				self.health_bar.sprite.segment.empty()
+				self.health_bar.empty()
+
 			self.kill()
 
 class Explosion(pygame.sprite.Sprite):
@@ -379,6 +387,13 @@ class Explosion(pygame.sprite.Sprite):
 	def __init__(self, type: str, pos: tuple | pygame.math.Vector2, game: Game, frames: list = None) -> None:
 
 		super().__init__()
+
+		self.TYPE = type
+		self.game = game
+		self.ROTATE_SPEED = 20
+		self.FADE_SPEED = 550
+		self.finished = False
+		self.alpha = 256
 		
 		if type == 'God-Rays': 
 			
@@ -392,13 +407,6 @@ class Explosion(pygame.sprite.Sprite):
 		self.image = self.og_image if type == 'Flash' else self.frames[self.frame_index] 
 		self.rect = self.image.get_rect(center = pos)
 		self.pos = pygame.math.Vector2(self.rect.center)
-
-		self.TYPE = type
-		self.game = game
-		self.ROTATE_SPEED = 20
-		self.FADE_SPEED = 550
-		self.finished = False
-		self.alpha = 256
 
 	def update(self, dt: float | int) -> None:
 		
@@ -419,89 +427,89 @@ class Explosion(pygame.sprite.Sprite):
 
 class Health_Bar(pygame.sprite.Sprite):
 
-	def __init__(self, offset: tuple, size: int | float, parent: Lemonoid) -> None:
+	def __init__(self, offset: tuple, size: int | float, parent: Lemonoid, type: str | None = 'Base') -> None:
 
 		super().__init__()
 
+		self.SIZE = size
+		self.TYPE = type
+		self.OFFSET = offset
 		self.parent = parent
-		self.offset = offset
-		self.pos = (self.parent.pos.x + self.offset[0], self.parent.pos.y + self.offset[1])
-		self.MAX_HEALTH = self.parent.MAX_HEALTH
-		self.health = self.parent.health
-		self.health_percent = self.health / self.MAX_HEALTH
+		self.pos = (self.parent.pos.x + self.OFFSET[0], self.parent.pos.y + self.OFFSET[1])
 		self.colour = (255, 0, 0)
 
-		self.image = pygame.transform.scale_by(pygame.image.load('Images/Health Bar/Base.png'), size).convert_alpha()
-		self.rect = self.image.get_rect(center = (parent.pos.x + offset[0], parent.pos.y + offset[1]))
-		self.pos = pygame.math.Vector2(self.rect.center)
-		self.segment = pygame.sprite.GroupSingle(Health_Bar_Segment(size = size, offset = self.offset, parent = self))
+		if self.TYPE == 'Base':
+
+			self.MAX_HEALTH = self.parent.MAX_HEALTH
+			self.health = self.parent.health
+			self.health_percent = self.health / self.MAX_HEALTH
+
+			self.image = pygame.transform.scale_by(pygame.image.load(f'Images/Health Bar/Base.png'), self.SIZE).convert_alpha()
+			self.rect = self.image.get_rect(center = (self.parent.pos.x + self.OFFSET[0], self.parent.pos.y + self.OFFSET[1]))
+			self.pos = pygame.math.Vector2(self.rect.center)
+			self.segment = pygame.sprite.GroupSingle(Health_Bar(size = self.SIZE, offset = self.OFFSET, parent = self, type = 'Child'))
+
+		if self.TYPE == 'Child':
+
+			self.full_image = pygame.transform.scale_by(pygame.image.load('Images/Health Bar/Full.png'), self.SIZE).convert_alpha()
+			self.empty_image = pygame.transform.scale_by(pygame.image.load('Images/Health Bar/Empty.png'), self.SIZE).convert_alpha()
+			self.images = [self.full_image, self.empty_image]
+			self.image_index = 0
+
+			self.image = self.images[self.image_index]
+			self.rect = self.image.get_rect(center = ((self.parent.rect.topleft[0] + self.image.get_width() + 2) - self.image.get_width() * (((1 - self.parent.health_percent) * 2) % 1), self.parent.rect.topleft[1]))
+			self.pos = pygame.math.Vector2(self.rect.topleft)
 
 	def update(self) -> None:
 
-		self.health = self.parent.health
-		self.health_percent = self.health / self.MAX_HEALTH
-		self.pos = pygame.math.Vector2((self.parent.pos.x + self.offset[0], self.parent.pos.y + self.offset[1]))
-		self.rect.center = self.pos
-		self.change_colour()
+		if self.TYPE == 'Base':
+
+			self.health = self.parent.health
+			self.health_percent = self.health / self.MAX_HEALTH
+			self.pos = pygame.math.Vector2((self.parent.pos.x + self.OFFSET[0], self.parent.pos.y - self.OFFSET[1]))
+			self.rect.center = self.pos
+			self.change_colour()
+
+		if self.TYPE == 'Child':
+
+			self.position()
+			self.change_colour()
+
+			if self.parent.health_percent < 1 / self.parent.MAX_HEALTH: self.pos.x = self.parent.rect.topleft[0] + (2 * self.SIZE) 
+			if self.parent.health_percent > 0.5: self.image_index = 0
+			if self.parent.health_percent <= 0.5: self.image_index = 1
+
+			self.image = self.images[self.image_index]
+			self.rect = self.image.get_rect(topleft = self.pos)
 
 	def change_colour(self) -> None:
 
-		if self.health_percent > 0.5: new_colour = ((255 * (1 - self.health_percent)) * 2, 255, 0)
-		if self.health_percent <= 0.5: new_colour = (255, (255 * self.health_percent) * 2, 0)
+		if self.TYPE == 'Base': 
 
-		array = pygame.PixelArray(self.image)
-		array.replace(self.colour, new_colour)
-		array.close()
+			if self.health_percent > 0.5: new_colour = ((255 * (1 - self.health_percent)) * 2, 255, 0)
+			if self.health_percent <= 0.5: new_colour = (255, (255 * self.health_percent) * 2, 0)
 
-		self.colour = new_colour
+			array = pygame.PixelArray(self.image)
+			array.replace(self.colour, new_colour)
+			array.close()
 
-class Health_Bar_Segment(pygame.sprite.Sprite):
-	
-	def __init__(self, size: int | tuple, offset: tuple, parent: Health_Bar) -> None:
+			self.colour = new_colour
+		
+		if self.TYPE == 'Child': 
 
-		super().__init__()
+			if self.parent.health_percent > 0.5: new_colour = ((255 * (1 - self.parent.health_percent)) * 2, 255, 0)
+			if self.parent.health_percent <= 0.5: new_colour = (255, (255 * self.parent.health_percent) * 2, 0)
 
-		self.parent = parent
-		self.size = size
-		self.offset = offset
-		self.colour = (255, 0, 0)
+			array = pygame.PixelArray(self.image)
+			array.replace(self.colour, new_colour)
+			array.close()
 
-		self.full_image = pygame.transform.scale_by(pygame.image.load('Images/Health Bar/Full.png'), size).convert_alpha()
-		self.empty_image = pygame.transform.scale_by(pygame.image.load('Images/Health Bar/Empty.png'), size).convert_alpha()
-		self.images = [self.full_image, self.empty_image]
-		self.image_index = 0
-
-		self.image = self.images[self.image_index]
-		self.rect = self.image.get_rect(center = (((self.parent.rect.topleft[0] + self.offset[0]) + self.image.get_width() + 2) - self.image.get_width() * (((1 - self.parent.health_percent) * 2) % 1), self.parent.rect.topleft[1] + self.offset[1]))
-		self.pos = pygame.math.Vector2(self.rect.topleft)
-
-	def update(self) -> None:
-
-		self.position()
-		self.change_colour()
-
-		if self.parent.health_percent < 1 / self.parent.MAX_HEALTH: self.pos.x = self.parent.rect.topleft[0] + (2 * self.size) 
-		if self.parent.health_percent > 0.5: self.image_index = 0
-		if self.parent.health_percent <= 0.5: self.image_index = 1
-
-		self.image = self.images[self.image_index]
-		self.rect = self.image.get_rect(topleft = self.pos)
+			self.colour = new_colour
 
 	def position(self) -> None:
 
-		self.pos.x = ((self.parent.rect.topleft[0] + self.offset[0]) + self.image.get_width() + (2 * self.size)) - self.image.get_width() * (((1 - self.parent.health_percent) * 2) % 1)
-		self.pos.y = self.parent.rect.topleft[1] + self.offset[1]
-
-	def change_colour(self) -> None:
-
-		if self.parent.health_percent > 0.5: new_colour = ((255 * (1 - self.parent.health_percent)) * 2, 255, 0)
-		if self.parent.health_percent <= 0.5: new_colour = (255, (255 * self.parent.health_percent) * 2, 0)
-
-		array = pygame.PixelArray(self.image)
-		array.replace(self.colour, new_colour)
-		array.close()
-
-		self.colour = new_colour
+		self.pos.x = (self.parent.rect.topleft[0] + self.image.get_width() + (2 * self.SIZE)) - self.image.get_width() * (((1 - self.parent.health_percent) * 2) % 1)
+		self.pos.y = self.parent.rect.topleft[1]
 
 def main():
 
@@ -547,6 +555,10 @@ def main():
 			explosions.update(dt)
 			explosions.draw(screen)
 
+			# Lasers
+			lasers_fired.draw(screen)
+			lasers_fired.update(dt)
+
 			# Player
 			player.update(dt)
 			player.draw(screen)
@@ -554,10 +566,6 @@ def main():
 			# Lemonoids
 			lemonoids.draw(screen)
 			lemonoids.update(dt)
-
-			# Lasers
-			lasers_fired.draw(screen)
-			lasers_fired.update(dt)
 
 			# Crosshair
 			crosshair.draw(screen)
