@@ -60,6 +60,17 @@ class Player(pygame.sprite.Sprite):
 		super().__init__()
 
 		self.game = game
+
+		self.ACCELERATION_VEL = 0.975
+		self.SPEED = 20
+		self.FIRE_RATE = 0
+		self.FIRE_RATES = {0: 2} # ship index: fire rate
+		self.ACCURACIES = {0: 1.5} # ship index: accuracy (fire spread) in degrees
+
+		self.x_vel = 0
+		self.y_vel = 0
+		self.angle = 0
+		self.fire_buffer = 0
 		self.ship_index = 0
 
 		self.og_image = pygame.image.load(f'Images/Player/Ship{self.ship_index}/Normal.png')
@@ -72,15 +83,7 @@ class Player(pygame.sprite.Sprite):
 		self.shoot_sfx = pygame.mixer.Sound('Audio/SFX/Player/Shoot.wav')
 
 		self.lasers_fired = pygame.sprite.Group()
-		self.ACCELERATION_VEL = 0.975
-		self.SPEED = 20
-		self.FIRE_RATE = 0
-		self.FIRE_RATES = {0: 2}
-		self.ACCURACIES = {0: 1.0} #ship index: fire rate
-		self.x_vel = 0
-		self.y_vel = 0
-		self.angle = 0
-		self.fire_buffer = 0
+
 		self.set_fire_rate()
 
 	def update(self, dt: float | int) -> None: 
@@ -128,9 +131,8 @@ class Player(pygame.sprite.Sprite):
 		
 		x_distance = pos[0] - self.pos.x
 		y_distance = pos[1] - self.pos.y
-		radians = atan2(-y_distance, x_distance)
-		radians %= 2 * pi
-		self.angle = round(degrees(radians), 2)
+		angle_to = degrees(atan2(-y_distance, x_distance) % (2 * pi))
+		self.angle = round(angle_to, 2)
 		self.image = pygame.transform.rotate(og_image, self.angle).convert_alpha()
 		self.rect = self.image.get_rect(center = self.pos)
 
@@ -154,6 +156,10 @@ class Crosshair(pygame.sprite.Sprite):
 	def __init__(self, type: int, game: Game) -> None:
 
 		super().__init__()
+
+		self.game = game
+		self.ROTATE_SPEED = 500
+		self.angle = 0
 		
 		self.unfocus_image = pygame.transform.scale_by(pygame.image.load(f'Images/Crosshair/Ship{type}-Unfocus.png'), 3).convert_alpha()
 		self.focus_image = pygame.transform.scale_by(pygame.image.load(f'Images/Crosshair/Ship{type}-Focus.png'), 3).convert_alpha()
@@ -163,10 +169,6 @@ class Crosshair(pygame.sprite.Sprite):
 
 		self.rect = self.image.get_rect(center = (0, 0))
 		self.pos = pygame.math.Vector2()
-
-		self.game = game
-		self.ROTATE_SPEED = 500
-		self.angle = 0
 
 	def update(self, dt: float | int) -> None:
 
@@ -246,6 +248,7 @@ class Lemonoid(pygame.sprite.Sprite):
 		self.DAMAGE = 1
 		self.MAX_HEALTH = max_health
 		self.EXPLOSION_VEL = 8
+		
 		self.angle = angle
 		self.health = self.MAX_HEALTH
 		self.colliding = False

@@ -9,5 +9,5 @@ FPS = 144
 BG_COLOUR = '#101010'
 
 # Sound
-SFX = False
+SFX = True
 MUSIC = False
