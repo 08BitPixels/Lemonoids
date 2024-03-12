@@ -139,7 +139,7 @@ class Player(pygame.sprite.Sprite):
 	def shoot(self, dt: int | float) -> None:
 
 		if self.fire_buffer < 0: self.set_fire_rate()
-		elif self.fire_buffer == 0: 
+		elif self.fire_buffer == 0:
 			
 			if SFX: self.shoot_sfx.play()
 			self.lasers_fired.add(Laser(start_pos = self.pos, angle = self.angle + uniform(-self.ACCURACIES[self.ship_index], self.ACCURACIES[self.ship_index]), laser_index = self.ship_index, game = self.game))
@@ -200,19 +200,21 @@ class Laser(pygame.sprite.Sprite):
 		self.game = game
 		self.ANGLE = angle
 		self.SPEED = 1000
-		self.collided = False
+		self.collided = 0
 		self.laser_index = laser_index
 
 		self.image = pygame.transform.rotate(pygame.image.load(f'Images/Laser/Laser{self.laser_index}.png'), self.ANGLE).convert_alpha()
 		self.hit_image = pygame.transform.rotate(pygame.image.load(f'Images/Laser/Hit.png'), self.ANGLE).convert_alpha()
+		self.mask = pygame.mask.from_surface(self.image)
 
 		self.rect = self.image.get_rect(center = start_pos)
 		self.pos = pygame.math.Vector2(self.rect.center)
 
 	def update(self, dt: int | float) -> None:
 
-		if self.collided: self.kill()
+		if self.collided >= 2: self.kill()
 		self.rect.center = self.pos
+
 		self.move(dt)
 		self.input()
 
@@ -221,7 +223,9 @@ class Laser(pygame.sprite.Sprite):
 		if self.pos.y <= 0 - (self.image.get_height() / 2) or self.pos.y >= HEIGHT + (self.image.get_height() / 2): self.kill()
 		if self.pos.x <= 0 - (self.image.get_width() / 2) or self.pos.x >= WIDTH + (self.image.get_width() / 2): self.kill()
 
-		if pygame.sprite.spritecollide(self, self.game.lemonoids, False): self.hit()
+		if pygame.sprite.spritecollide(self, self.game.lemonoids, False, pygame.sprite.collide_rect):
+			if pygame.sprite.spritecollide(self, self.game.lemonoids, False, pygame.sprite.collide_mask):
+				self.hit()
 
 	def move(self, dt: int | float) -> None:
 
@@ -233,7 +237,7 @@ class Laser(pygame.sprite.Sprite):
 
 		self.image = self.hit_image
 		self.rect = self.image.get_rect(center = self.pos)
-		self.collided = True
+		self.collided += 1
 		
 class Lemonoid(pygame.sprite.Sprite):
 
@@ -258,6 +262,7 @@ class Lemonoid(pygame.sprite.Sprite):
 		self.image = self.og_image
 		if self.size == 1: self.rect = self.image.get_rect(center = (CENTER_X + cos(radians(self.angle)) * WIDTH, CENTER_Y - sin(radians(self.angle)) * WIDTH))
 		elif self.size != 1: self.rect = self.image.get_rect(center = pos)
+		self.mask = pygame.mask.from_surface(self.image)
 		self.pos = pygame.math.Vector2(self.rect.center)
 
 		self.hit_sfx = pygame.mixer.Sound('Audio/SFX/Lemonoid/Hit.wav')
@@ -270,6 +275,7 @@ class Lemonoid(pygame.sprite.Sprite):
 	def update(self, dt: float | int) -> None:
 
 		self.rect.center = self.pos
+		self.mask = pygame.mask.from_surface(self.image)
 
 		if self.size != (1 / 2 / 2 / 2):
 
@@ -285,12 +291,14 @@ class Lemonoid(pygame.sprite.Sprite):
 
 	def input(self) -> None:
 
-		if pygame.sprite.spritecollide(self, self.game.player.sprite.lasers_fired, False) and not self.colliding: 
-			
-			self.hit()
-			self.colliding = True
+		if pygame.sprite.spritecollide(self, self.game.player.sprite.lasers_fired, False, pygame.sprite.collide_rect): 
+				
+			if pygame.sprite.spritecollide(self, self.game.player.sprite.lasers_fired, False, pygame.sprite.collide_mask) and not self.colliding: 
+				
+				self.hit()
+				self.colliding = True
 
-		elif not pygame.sprite.spritecollide(self, self.game.player.sprite.lasers_fired, False): self.colliding = False
+			else: self.colliding = False
 			
 	def move(self, dt: float | int) -> None:
 
@@ -571,8 +579,8 @@ def main():
 			lemonoids.update(dt)
 
 			# Crosshair
-			crosshair.draw(screen)
 			crosshair.update(dt)
+			crosshair.draw(screen)
 
 		pygame.display.set_caption(f'Lemonoids | FPS: {round(clock.get_fps(), 1)}')
 		pygame.display.update()
