@@ -8,6 +8,7 @@ FPS = 144
 # Colours
 BG_COLOUR = '#101010'
 BLACK = '#000000'
+DARK_GREY = '#404040'
 GREY = '#808080'
 WHITE = '#ffffff'
 GREEN = '#33ff00'

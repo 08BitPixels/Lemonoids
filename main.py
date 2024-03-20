@@ -12,9 +12,9 @@ pygame.init()
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 clock = pygame.time.Clock()
 
-score_font = pygame.font.Font('Fonts/pixel_font.ttf', 75)
-highscore_font = pygame.font.Font('Fonts/pixel_font.ttf', 50)
-secondary_font = pygame.font.Font('Fonts/pixel_font.ttf', 25)
+h1_font = pygame.font.Font('Fonts/pixel_font.ttf', 75)
+h2_font = pygame.font.Font('Fonts/pixel_font.ttf', 50)
+h3_font = pygame.font.Font('Fonts/pixel_font.ttf', 25)
 
 pygame.mouse.set_visible(False)
 pygame.display.set_icon(pygame.image.load('Images/Icon.ico'))
@@ -29,6 +29,7 @@ class Game:
 		start_time = time()
 
 		self.S_PLAY = 'play'
+		self.S_GAME_OVER = 'game_over'
 
 		self.state = self.S_PLAY
 		self.score = 0
@@ -36,7 +37,7 @@ class Game:
 		self.shake_offset = (0, 0)
 		self.shake_offsets = []
 
-		self.explosion_frames = [pygame.transform.scale_by(pygame.transform.rotate(pygame.image.load(f'Images/Explosion/God-Rays.png'), step), 0.75).convert_alpha() for step in range(0, int(360 / 12), 2)]
+		self.explosion_frames = [pygame.transform.scale_by(pygame.transform.rotate(pygame.image.load(f'Images/Explosion/God-Rays.png'), step), 0.75).convert_alpha() for step in range(0, int(360 / 20), 2)]
 
 		self.player = pygame.sprite.GroupSingle(Player(game = self))
 		self.crosshair = pygame.sprite.GroupSingle(Crosshair(type = self.player.sprite.ship_index, game = self))
@@ -44,15 +45,30 @@ class Game:
 		self.explosions = pygame.sprite.Group()
 		self.text = Text(game = self)
 
-		self.LEMONOID_FREQUENCY = 10000
+		self.lemonoid_frequency = 5000
 		self.LEMONOID_TIMER = pygame.USEREVENT + 0
-		pygame.time.set_timer(self.LEMONOID_TIMER, self.LEMONOID_FREQUENCY)
+		pygame.time.set_timer(self.LEMONOID_TIMER, self.lemonoid_frequency)
 
-		end_time = time()
-		print(f'Game Initialised in {round(end_time - start_time, 3)}s')
+		print(f'Game Initialised in {round(time() - start_time, 3)}s')
 
 	def update(self) -> None:
+
 		if self.score > self.highscore: self.highscore = self.score
+
+		if self.score > 10000 and self.lemonoid_frequency == 5000:
+
+			self.lemonoid_frequency = 3000
+			pygame.time.set_timer(self.LEMONOID_TIMER, self.lemonoid_frequency)
+
+		if self.score > 50000 and self.lemonoid_frequency == 3000:
+
+			self.lemonoid_frequency = 2000
+			pygame.time.set_timer(self.LEMONOID_TIMER, self.lemonoid_frequency)
+
+		if self.score > 100000 and self.lemonoid_frequency == 2000:
+
+			self.lemonoid_frequency = 1000
+			pygame.time.set_timer(self.LEMONOID_TIMER, self.lemonoid_frequency)
 
 	def get_state(self) -> str:
 		return self.state
@@ -63,18 +79,32 @@ class Game:
 	def shake(self, offset: tuple) -> None:
 		self.shake_offset = (self.shake_offset[0] * offset[0], self.shake_offset[1] * offset[1])
 
-	def reset(self) -> None:
+	def game_over(self) -> None:
 
 		self.score = 0
+		self.state = self.S_GAME_OVER
+		self.reset()
+
+	def respawn(self) -> None:
+
+		self.lemonoids.empty()
+		self.explosions.empty()
+		self.player.sprite.respawn()
+
+	def reset(self) -> None:
+
 		self.lemonoids.empty()
 		self.explosions.empty()
 		self.player.sprite.reset()
 
 	def save(self) -> None:
 
+		print('Saving...')
 		with open('Saves/save.txt', 'w') as save:
 
 			save.write(f'HIGHSCORE = {self.highscore}')
+
+		print('Saving Completed Successfully')
 
 class Text:
 
@@ -85,40 +115,86 @@ class Text:
 
 		# Texts
 
-		self.fps_text1 = secondary_font.render('FPS:', False, GREY, BLACK)
+		self.fps_text1 = h3_font.render('FPS:', False, GREY, BLACK)
 		self.fps_text1_rect = self.fps_text1.get_rect(topleft = (0, 0))
 
 		self.fps_text2 = None
 		self.fps_text2_rect = None
 
 		# Play
-		self.score_text = score_font.render('0', False, WHITE)
-		self.score_text_rect = self.score_text.get_rect(center = (CENTER_X, 100))
+		self.score_text = None
+		self.score_text_rect = None
 
-		self.highscore_text = highscore_font.render('0', False, GREY)
-		self.highscore_text_rect = self.highscore_text.get_rect(center = (CENTER_X, 35))
+		self.play_text1 = h3_font.render('Score', False, DARK_GREY)
+		self.play_text1_rect = self.play_text1.get_rect(center = (CENTER_X, 170))
+
+		self.highscore_text = None
+		self.highscore_text_rect = None
+
+		self.play_text2 = h3_font.render('Highscore', False, DARK_GREY)
+		self.play_text2_rect = self.play_text2.get_rect(center = (CENTER_X, 65))
+
+		self.lives_text = None
+		self.lives_text_rect = None
+
+		self.play_text3 = h3_font.render('Lives', False, DARK_GREY)
+		self.play_text3_rect = self.play_text3.get_rect(center = (CENTER_X, HEIGHT - 40))
+
+		# Game Over
+		self.game_over_text1 = h1_font.render('GAME OVER', False, WHITE)
+		self.game_over_text1_rect = self.game_over_text1.get_rect(center = (CENTER_X, CENTER_Y))
+
+		self.game_over_text2 = h3_font.render('Press [SPACE] to retry', False, YELLOW)
+		self.game_over_text2_rect = self.game_over_text2.get_rect(center = (CENTER_X, CENTER_Y + 45))
 
 	def update(self) -> None:
 
 		fps = round(clock.get_fps(), 1)
 		fps_colour = GREEN if fps > 60 else YELLOW if fps < 60 and fps > 10 else RED
-		self.fps_text2 = secondary_font.render(str(fps), False, fps_colour, BLACK)
+		self.fps_text2 = h3_font.render(str(fps), False, fps_colour, BLACK)
 		self.fps_text2_rect = self.fps_text2.get_rect(topleft = (75, 0))
 
-		self.score_text = score_font.render(str(self.game.score), False, WHITE)
-		self.score_text_rect = self.score_text.get_rect(center = (CENTER_X, 100))
+		if self.game.get_state() == self.game.S_PLAY:
 
-		self.highscore_text = highscore_font.render(str(self.game.highscore), False, GREY)
-		self.highscore_text_rect = self.highscore_text.get_rect(center = (CENTER_X, 35))
+			self.score_text = h1_font.render(str(self.game.score), False, WHITE)
+			self.score_text_rect = self.score_text.get_rect(center = (CENTER_X, 120))
 
-		if self.game.get_state() == self.game.S_PLAY: 
+			self.highscore_text = h2_font.render(str(self.game.highscore), False, GREY)
+			self.highscore_text_rect = self.highscore_text.get_rect(center = (CENTER_X, 30))
+
+			self.lives_text = h1_font.render(str(self.game.player.sprite.lives), False, [RED, YELLOW, GREEN][self.game.player.sprite.lives - 1])
+			self.lives_text_rect = self.lives_text.get_rect(midbottom = (CENTER_X, HEIGHT - 40))
 
 			self.texts = [
+
 				[self.fps_text1, self.fps_text1_rect],
 				[self.fps_text2, self.fps_text2_rect],
 
 				[self.score_text, self.score_text_rect],
-				[self.highscore_text, self.highscore_text_rect]
+				[self.play_text1, self.play_text1_rect],
+
+				[self.highscore_text, self.highscore_text_rect],
+				[self.play_text2, self.play_text2_rect],
+
+				[self.lives_text, self.lives_text_rect],
+				[self.play_text3, self.play_text3_rect]
+
+			]
+
+		elif self.game.get_state() == self.game.S_GAME_OVER:
+
+			self.texts = [
+
+				[self.game_over_text1, self.game_over_text1_rect],
+				[self.game_over_text2, self.game_over_text2_rect]
+
+			]
+
+		else: 
+			
+			self.texts = [
+				[self.fps_text1, self.fps_text1_rect],
+				[self.fps_text2, self.fps_text2_rect]
 			]
 
 class Player(pygame.sprite.Sprite):
@@ -132,20 +208,24 @@ class Player(pygame.sprite.Sprite):
 		self.ACCELERATION_VEL = 0.975
 		self.SPEED = 20
 		self.FIRE_RATE = 0
-		self.FIRE_RATES = {0: 2} # ship index: fire rate
-		self.ACCURACIES = {0: 1.5} # ship index: accuracy (fire spread) in degrees
+		self.FIRE_RATES = {0: 5} # ship index: fire rate
+		self.ACCURACIES = {0: 3} # ship index: accuracy (fire spread) in degrees
+		self.MAX_LIVES = 3
 
 		self.x_vel = 0
 		self.y_vel = 0
 		self.angle = 0
 		self.fire_buffer = 0
 		self.ship_index = 0
+		self.lives = self.MAX_LIVES
+		self.collided = False
 
 		self.og_image = pygame.image.load(f'Images/Player/Ship{self.ship_index}/Normal.png')
 		self.shoot_image = pygame.image.load(f'Images/Player/Ship{self.ship_index}/Shoot.png')
 
 		self.image = self.og_image
 		self.rect = self.image.get_rect(center = (CENTER_X, CENTER_Y))
+		self.mask = pygame.mask.from_surface(self.image)
 		self.pos = pygame.math.Vector2(self.rect.center)
 
 		self.shoot_sfx = pygame.mixer.Sound('Audio/SFX/Player/Shoot.wav')
@@ -157,6 +237,7 @@ class Player(pygame.sprite.Sprite):
 	def update(self, dt: float | int) -> None: 
 		
 		self.rect.center = self.pos
+		self.mask = pygame.mask.from_surface(self.image)
 		self.input(dt)
 
 	def input(self, dt: float | int) -> None:
@@ -165,16 +246,35 @@ class Player(pygame.sprite.Sprite):
 		mouse_pressed = pygame.mouse.get_pressed()[0]
 		mouse_pos = pygame.mouse.get_pos()
 
+		# Movement
 		self.move_x(keys_pressed[pygame.K_d] - keys_pressed[pygame.K_a], dt)
 		self.move_y(keys_pressed[pygame.K_s] - keys_pressed[pygame.K_w], dt)
 
 		self.bound_movement()
 
+		# Direction
 		if self.fire_buffer != 0: self.rotate_to(mouse_pos, self.og_image)
 		if self.fire_buffer == 0: self.rotate_to(mouse_pos, self.shoot_image)
 
 		if mouse_pressed or keys_pressed[pygame.K_SPACE]: self.shoot(dt)
 		elif not mouse_pressed and not keys_pressed[pygame.K_SPACE]: self.set_fire_rate()
+
+		# Collisions
+		if pygame.sprite.spritecollide(self, self.game.lemonoids, False, pygame.sprite.collide_rect):
+
+			if pygame.sprite.spritecollide(self, self.game.lemonoids, False, pygame.sprite.collide_mask) and not self.collided:
+
+				self.hit()
+				self.collided = True
+
+			else: self.collided = False
+
+	def hit(self) -> None:
+
+		self.lives -= 1
+		if self.lives <= 0: self.game.game_over()
+		self.game.respawn()
+		self.game.explosions.add(Explosion(type = 0, pos = self.pos, game = self.game, frames = self.game.explosion_frames))
 
 	def bound_movement(self) -> None:
 
@@ -210,7 +310,14 @@ class Player(pygame.sprite.Sprite):
 		elif self.fire_buffer == 0:
 			
 			if SFX: self.shoot_sfx.play()
-			self.lasers_fired.add(Laser(start_pos = self.pos, angle = self.angle + uniform(-self.ACCURACIES[self.ship_index], self.ACCURACIES[self.ship_index]), laser_index = self.ship_index, game = self.game))
+			self.lasers_fired.add(
+				Laser(
+					start_pos = self.pos, 
+		  			angle = self.angle + uniform(-(self.ACCURACIES[self.ship_index] / 2), self.ACCURACIES[self.ship_index] / 2), 
+					laser_index = self.ship_index, 
+					game = self.game
+				)
+			)
 
 		self.fire_buffer -= round(100 * dt)
 
@@ -219,11 +326,19 @@ class Player(pygame.sprite.Sprite):
 		self.FIRE_RATE = self.FIRE_RATES[self.ship_index]
 		self.fire_buffer = self.FIRE_RATE
 
+	def respawn(self) -> None:
+
+		self.pos = pygame.math.Vector2((CENTER_X, CENTER_Y))
+		self.x_vel, self.y_vel, self.angle = 0, 0, 0
+		self.collided = False
+
 	def reset(self) -> None:
 
+		self.lives = self.MAX_LIVES
 		self.image = self.og_image
 		self.pos = pygame.math.Vector2((CENTER_X, CENTER_Y))
-		self.x_vel, self.y_vel, self.angle = 0
+		self.x_vel, self.y_vel, self.angle = 0, 0, 0
+		self.collided = False
 		self.lasers_fired.empty()
 
 class Crosshair(pygame.sprite.Sprite):
@@ -434,14 +549,14 @@ class Lemonoid(pygame.sprite.Sprite):
 		if self.size == 1:
 
 			if SFX: self.explosion_sfx.play()
-			self.game.explosions.add(Explosion(type = 'God-Rays', pos = self.pos, frames = self.game.explosion_frames, game = self.game))
+			self.game.explosions.add(Explosion(type = 0, pos = self.pos, frames = self.game.explosion_frames, game = self.game))
 			self.add_shake_offsets()
 			self.game.score += 100
 
 		elif self.size < 1:
 
 			if SFX: self.explosion_sfx_2.play()
-			self.game.explosions.add(Explosion(type = 'Flash', pos = self.pos, game = self.game))
+			self.game.explosions.add(Explosion(type = 1, pos = self.pos, game = self.game))
 			self.game.score += 25
 
 		self.size /= 2
@@ -470,7 +585,7 @@ class Lemonoid(pygame.sprite.Sprite):
 
 class Explosion(pygame.sprite.Sprite):
 
-	def __init__(self, type: str, pos: tuple | pygame.math.Vector2, game: Game, frames: list = None) -> None:
+	def __init__(self, type: int, pos: tuple | pygame.math.Vector2, game: Game, frames: list = None) -> None:
 
 		super().__init__()
 
@@ -481,22 +596,22 @@ class Explosion(pygame.sprite.Sprite):
 		self.finished = False
 		self.alpha = 256
 		
-		if type == 'God-Rays': 
+		if type == 0: 
 			
 			self.frames = frames
 			self.frame_index = 0
 
-		if type == 'Flash':
+		if type == 1:
 
 			self.og_image = pygame.transform.scale_by(pygame.image.load(f'Images/Explosion/Flash.png'), 0.5).convert_alpha()
 
-		self.image = self.og_image if type == 'Flash' else self.frames[self.frame_index] 
+		self.image = self.og_image if type == 1 else self.frames[self.frame_index] 
 		self.rect = self.image.get_rect(center = pos)
 		self.pos = pygame.math.Vector2(self.rect.center)
 
 	def update(self, dt: float | int) -> None:
 		
-		if self.TYPE == 'God-Rays': self.rotate(dt)
+		if self.TYPE == 0: self.rotate(dt)
 		self.fade(dt)
 
 	def rotate(self, dt: float | int) -> None:
@@ -631,16 +746,20 @@ def main():
 					new_lemonoid = Lemonoid(angle = angle, max_health = 20, move_speed = 75, size = 1, game = game)
 					lemonoids.add(new_lemonoid)
 
+			if game.get_state() == game.S_GAME_OVER:
+
+				if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+
+					game.reset()
+					game.set_state(game.S_PLAY)
+
 		screen.fill(BG_COLOUR)
 
 		if game.get_state() == game.S_PLAY:
 
 			# Game
 			game.update()
-			if len(game.shake_offsets) > 0:
-
-				game.shake(game.shake_offsets[0])
-				game.shake_offsets.pop(0)
+			if game.shake_offsets: game.shake(game.shake_offsets.pop(0))
 
 			# Explosions
 			explosions.update(dt)
