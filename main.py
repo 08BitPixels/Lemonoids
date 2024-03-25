@@ -45,7 +45,7 @@ class Game:
 		self.explosions = pygame.sprite.Group()
 		self.text = Text(game = self)
 
-		self.lemonoid_frequency = 5000
+		self.lemonoid_frequency = 15000
 		self.LEMONOID_TIMER = pygame.USEREVENT + 0
 		pygame.time.set_timer(self.LEMONOID_TIMER, self.lemonoid_frequency)
 
@@ -55,20 +55,23 @@ class Game:
 
 		if self.score > self.highscore: self.highscore = self.score
 
-		if self.score > 10000 and self.lemonoid_frequency == 5000:
+		if self.score > 10000 and self.lemonoid_frequency == 15000:
 
-			self.lemonoid_frequency = 3000
+			self.lemonoid_frequency = 10000
 			pygame.time.set_timer(self.LEMONOID_TIMER, self.lemonoid_frequency)
 
-		if self.score > 50000 and self.lemonoid_frequency == 3000:
+		if self.score > 50000 and self.lemonoid_frequency == 10000:
 
-			self.lemonoid_frequency = 2000
+			self.lemonoid_frequency = 7500
 			pygame.time.set_timer(self.LEMONOID_TIMER, self.lemonoid_frequency)
 
-		if self.score > 100000 and self.lemonoid_frequency == 2000:
+		if self.score > 100000 and self.lemonoid_frequency == 7500:
 
 			self.lemonoid_frequency = 1000
 			pygame.time.set_timer(self.LEMONOID_TIMER, self.lemonoid_frequency)
+
+	def add_score(self, score: int) -> None:
+		self.score += score
 
 	def get_state(self) -> str:
 		return self.state
@@ -205,11 +208,11 @@ class Player(pygame.sprite.Sprite):
 
 		self.game = game
 
-		self.ACCELERATION_VEL = 0.975
-		self.SPEED = 20
+		self.ACCELERATION_VEL = 0.999
+		self.SPEED = 2
 		self.FIRE_RATE = 0
-		self.FIRE_RATES = {0: 5} # ship index: fire rate
-		self.ACCURACIES = {0: 3} # ship index: accuracy (fire spread) in degrees
+		self.FIRE_RATES = {0: 10} # ship index: fire rate
+		self.ACCURACIES = {0: 2} # ship index: accuracy (fire spread) in degrees
 		self.MAX_LIVES = 3
 
 		self.x_vel = 0
@@ -220,8 +223,9 @@ class Player(pygame.sprite.Sprite):
 		self.lives = self.MAX_LIVES
 		self.collided = False
 
-		self.og_image = pygame.image.load(f'Images/Player/Ship{self.ship_index}/Normal.png')
-		self.shoot_image = pygame.image.load(f'Images/Player/Ship{self.ship_index}/Shoot.png')
+		self.og_image = pygame.transform.scale_by(pygame.image.load(f'Images/Player/Ship{self.ship_index}/Normal.png'), 0.75)
+		self.shoot_image = pygame.transform.scale_by(pygame.image.load(f'Images/Player/Ship{self.ship_index}/Shoot.png'), 0.75)
+		self.thruster_image = pygame.transform.scale_by(pygame.image.load(f'Images/Player/Ship{self.ship_index}/Thruster.png'), 0.75)
 
 		self.image = self.og_image
 		self.rect = self.image.get_rect(center = (CENTER_X, CENTER_Y))
@@ -239,6 +243,7 @@ class Player(pygame.sprite.Sprite):
 		self.rect.center = self.pos
 		self.mask = pygame.mask.from_surface(self.image)
 		self.input(dt)
+		self.wrap_around()
 
 	def input(self, dt: float | int) -> None:
 
@@ -247,14 +252,12 @@ class Player(pygame.sprite.Sprite):
 		mouse_pos = pygame.mouse.get_pos()
 
 		# Movement
-		self.move_x(keys_pressed[pygame.K_d] - keys_pressed[pygame.K_a], dt)
-		self.move_y(keys_pressed[pygame.K_s] - keys_pressed[pygame.K_w], dt)
-
-		self.bound_movement()
+		self.move(self.angle, keys_pressed[pygame.K_w], dt)
 
 		# Direction
 		if self.fire_buffer != 0: self.rotate_to(mouse_pos, self.og_image)
 		if self.fire_buffer == 0: self.rotate_to(mouse_pos, self.shoot_image)
+		if keys_pressed[pygame.K_w] and randint(0, 2) == 0: self.rotate_to(mouse_pos, self.thruster_image)
 
 		if mouse_pressed or keys_pressed[pygame.K_SPACE]: self.shoot(dt)
 		elif not mouse_pressed and not keys_pressed[pygame.K_SPACE]: self.set_fire_rate()
@@ -276,24 +279,22 @@ class Player(pygame.sprite.Sprite):
 		self.game.respawn()
 		self.game.explosions.add(Explosion(type = 0, pos = self.pos, game = self.game, frames = self.game.explosion_frames))
 
-	def bound_movement(self) -> None:
+	def wrap_around(self) -> None:
 
-		if self.pos.x > WIDTH - self.image.get_width() / 2: self.pos.x = WIDTH - self.image.get_width() / 2
-		elif self.pos.x < 0 + self.image.get_width() / 2: self.pos.x = 0 + self.image.get_width() / 2
-		if self.pos.y > HEIGHT - self.image.get_height() / 2: self.pos.y = HEIGHT - self.image.get_height() / 2
-		elif self.pos.y < 0 + self.image.get_height() / 2: self.pos.y =  0 + self.image.get_height() / 2
+		if self.pos.x > WIDTH + self.image.get_width() / 2: self.pos.x = 0 - self.image.get_width() / 2
+		elif self.pos.x < 0 - self.image.get_width() / 2: self.pos.x = WIDTH + self.image.get_width() / 2
+		if self.pos.y > HEIGHT + self.image.get_height() / 2: self.pos.y = 0 - self.image.get_height() / 2
+		elif self.pos.y < 0 - self.image.get_height() / 2: self.pos.y = HEIGHT + self.image.get_height() / 2
 
-	def move_x(self, dir: int, dt: float | int) -> None:
-		
-		self.x_vel += self.ACCELERATION_VEL * dir * self.SPEED * dt
+	def move(self, angle: int, momentum: int, dt: float | int) -> None:
+
+		self.x_vel += cos(radians(angle)) * self.ACCELERATION_VEL * momentum * self.SPEED * dt
 		self.x_vel = self.ACCELERATION_VEL * self.x_vel
 		self.pos.x += self.x_vel + self.game.shake_offset[0]
 
-	def move_y(self, dir: int, dt: float | int) -> None:
-		
-		self.y_vel += self.ACCELERATION_VEL * dir * self.SPEED * dt
+		self.y_vel += sin(radians(angle)) * self.ACCELERATION_VEL * momentum * self.SPEED * dt
 		self.y_vel = self.ACCELERATION_VEL * self.y_vel
-		self.pos.y += self.y_vel + self.game.shake_offset[1]
+		self.pos.y -= self.y_vel + self.game.shake_offset[1]
 
 	def rotate_to(self, pos: tuple, og_image: pygame.Surface) -> None:
 		
@@ -393,8 +394,8 @@ class Laser(pygame.sprite.Sprite):
 		self.collided = 0
 		self.laser_index = laser_index
 
-		self.image = pygame.transform.rotate(pygame.image.load(f'Images/Laser/Laser{self.laser_index}.png'), self.ANGLE).convert_alpha()
-		self.hit_image = pygame.transform.rotate(pygame.image.load(f'Images/Laser/Hit.png'), self.ANGLE).convert_alpha()
+		self.image = pygame.transform.rotate(pygame.transform.scale_by(pygame.image.load(f'Images/Laser/Laser{self.laser_index}.png'), 0.5), self.ANGLE).convert_alpha()
+		self.hit_image = pygame.transform.rotate(pygame.transform.scale_by(pygame.image.load(f'Images/Laser/Hit.png'), 0.5), self.ANGLE).convert_alpha()
 		self.mask = pygame.mask.from_surface(self.image)
 
 		self.rect = self.image.get_rect(center = start_pos)
@@ -448,7 +449,7 @@ class Lemonoid(pygame.sprite.Sprite):
 		self.colliding = False
 		self.size = size
 
-		self.og_image = pygame.transform.scale_by(pygame.transform.rotate(pygame.image.load('Images/Lemonoid/Lemonoid.png'), self.angle), self.size).convert_alpha()
+		self.og_image = pygame.transform.scale_by(pygame.transform.rotate(pygame.image.load('Images/Lemonoid/Lemonoid.png'), self.angle), self.size * 0.75).convert_alpha()
 		self.image = self.og_image
 		if self.size == 1: self.rect = self.image.get_rect(center = (CENTER_X + cos(radians(self.angle)) * WIDTH, CENTER_Y - sin(radians(self.angle)) * WIDTH))
 		elif self.size != 1: self.rect = self.image.get_rect(center = pos)
@@ -537,7 +538,7 @@ class Lemonoid(pygame.sprite.Sprite):
 
 			self.health -= self.DAMAGE
 			if SFX: self.hit_sfx.play()
-			self.game.score += 2
+			self.game.add_score(2)
 			array = pygame.PixelArray(self.image)
 			array.replace((247, 255, 0), (255, 255, 255))
 			array.close()
@@ -551,29 +552,28 @@ class Lemonoid(pygame.sprite.Sprite):
 			if SFX: self.explosion_sfx.play()
 			self.game.explosions.add(Explosion(type = 0, pos = self.pos, frames = self.game.explosion_frames, game = self.game))
 			self.add_shake_offsets()
-			self.game.score += 100
+			self.game.add_score(100)
 
 		elif self.size < 1:
 
 			if SFX: self.explosion_sfx_2.play()
 			self.game.explosions.add(Explosion(type = 1, pos = self.pos, game = self.game))
-			self.game.score += 25
+			self.game.add_score(25)
 
 		self.size /= 2
 		self.shrink(self.size)
 
 		if self.size < (1 / 2 / 2 / 2):
 
-			self.game.score += 5
+			self.game.add_score(5)
 			self.kill()
 
 		else:
 
-			new_direction = self.DIRECTION + randint(0, 180)
 			self.game.lemonoids.add(
-				Lemonoid(pos = self.pos, angle = new_direction, max_health = 8 if self.size == (1 / 2) else 4 if self.size == (1 / 2 / 2) else 1, move_speed = self.MOVE_SPEED * 1.5, size = self.size, game = self.game),
-				Lemonoid(pos = self.pos, angle = new_direction + 120, max_health = 8 if self.size == (1 / 2) else 4 if self.size == (1 / 2 / 2) else 1, move_speed = self.MOVE_SPEED * 1.5, size = self.size, game = self.game),
-				Lemonoid(pos = self.pos, angle = new_direction + 240, max_health = 8 if self.size == (1 / 2) else 4 if self.size == (1 / 2 / 2) else 1, move_speed = self.MOVE_SPEED * 1.5, size = self.size, game = self.game)
+				Lemonoid(pos = self.pos, angle = self.DIRECTION - 60, max_health = 8 if self.size == (1 / 2) else 4 if self.size == (1 / 2 / 2) else 1, move_speed = self.MOVE_SPEED * 1.5, size = self.size, game = self.game),
+				Lemonoid(pos = self.pos, angle = self.DIRECTION, max_health = 8 if self.size == (1 / 2) else 4 if self.size == (1 / 2 / 2) else 1, move_speed = self.MOVE_SPEED * 1.5, size = self.size, game = self.game),
+				Lemonoid(pos = self.pos, angle = self.DIRECTION + 60, max_health = 8 if self.size == (1 / 2) else 4 if self.size == (1 / 2 / 2) else 1, move_speed = self.MOVE_SPEED * 1.5, size = self.size, game = self.game)
 			)
 			
 			if self.size != (1 / 2 / 2 / 2):
@@ -603,7 +603,7 @@ class Explosion(pygame.sprite.Sprite):
 
 		if type == 1:
 
-			self.og_image = pygame.transform.scale_by(pygame.image.load(f'Images/Explosion/Flash.png'), 0.5).convert_alpha()
+			self.og_image = pygame.transform.scale_by(pygame.image.load(f'Images/Explosion/Flash.png'), 0.25).convert_alpha()
 
 		self.image = self.og_image if type == 1 else self.frames[self.frame_index] 
 		self.rect = self.image.get_rect(center = pos)
