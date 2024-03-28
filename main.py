@@ -2,8 +2,9 @@ import pygame
 
 from sys import exit
 from time import time
+from threading import Thread
 from math import atan2, cos, sin, degrees, radians, pi
-from random import randint, uniform
+from random import randint, uniform, choice
 
 from constants import *
 
@@ -12,10 +13,12 @@ pygame.init()
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 clock = pygame.time.Clock()
 
+# Fonts
 h1_font = pygame.font.Font('Fonts/pixel_font.ttf', 75)
 h2_font = pygame.font.Font('Fonts/pixel_font.ttf', 50)
 h3_font = pygame.font.Font('Fonts/pixel_font.ttf', 25)
 
+# Window Setup
 pygame.mouse.set_visible(False)
 pygame.display.set_icon(pygame.image.load('Images/Icon.ico'))
 pygame.display.set_caption('Lemonoids | INITIALISING...')
@@ -41,9 +44,11 @@ class Game:
 
 		self.player = pygame.sprite.GroupSingle(Player(game = self))
 		self.crosshair = pygame.sprite.GroupSingle(Crosshair(type = self.player.sprite.ship_index, game = self))
-		self.lemonoids = pygame.sprite.Group(Lemonoid(angle = randint(0, 360), max_health = 20, move_speed = 75, size = 1, game = self))
+		self.lemonoids = pygame.sprite.Group()
+		for i in range(3): self.lemonoids.add(Lemonoid(angle = randint(0, 360), max_health = 10, move_speed = 75, size = 1, game = self))
 		self.explosions = pygame.sprite.Group()
 		self.text = Text(game = self)
+		self.particles = pygame.sprite.Group()
 
 		self.lemonoid_frequency = 15000
 		self.LEMONOID_TIMER = pygame.USEREVENT + 0
@@ -90,9 +95,12 @@ class Game:
 
 	def respawn(self) -> None:
 
+		self.shake_offset = (0, 0)
+		self.shake_offsets.clear()
 		self.lemonoids.empty()
+		for i in range(3): self.lemonoids.add(Lemonoid(angle = randint(0, 360), max_health = 10, move_speed = 75, size = 1, game = self))
+		pygame.time.set_timer(self.LEMONOID_TIMER, self.lemonoid_frequency)
 		self.explosions.empty()
-		self.player.sprite.respawn()
 
 	def reset(self) -> None:
 
@@ -165,7 +173,7 @@ class Text:
 			self.highscore_text = h2_font.render(str(self.game.highscore), False, GREY)
 			self.highscore_text_rect = self.highscore_text.get_rect(center = (CENTER_X, 30))
 
-			self.lives_text = h1_font.render(str(self.game.player.sprite.lives), False, [RED, YELLOW, GREEN][self.game.player.sprite.lives - 1])
+			self.lives_text = h1_font.render(str(self.game.player.sprite.lives), False, [RED, RED, YELLOW, GREEN][self.game.player.sprite.lives])
 			self.lives_text_rect = self.lives_text.get_rect(midbottom = (CENTER_X, HEIGHT - 40))
 
 			self.texts = [
@@ -209,11 +217,14 @@ class Player(pygame.sprite.Sprite):
 		self.game = game
 
 		self.ACCELERATION_VEL = 0.999
-		self.SPEED = 2
+		self.SPEED = 3
 		self.FIRE_RATE = 0
-		self.FIRE_RATES = {0: 10} # ship index: fire rate
-		self.ACCURACIES = {0: 2} # ship index: accuracy (fire spread) in degrees
+		self.FIRE_RATES = {0: 8} # ship index: fire rate
+		self.ACCURACIES = {0: 1} # ship index: accuracy (fire spread) in degrees
 		self.MAX_LIVES = 3
+		self.BLINK_FREQUENCY = 250
+		self.BLINK_TIMER = pygame.USEREVENT + 1
+		self.EXPLOSION_VEL = 4
 
 		self.x_vel = 0
 		self.y_vel = 0
@@ -222,10 +233,16 @@ class Player(pygame.sprite.Sprite):
 		self.ship_index = 0
 		self.lives = self.MAX_LIVES
 		self.collided = False
+		self.dead = False
+		self.death_time = 0
+		self.blink_index = 0
 
-		self.og_image = pygame.transform.scale_by(pygame.image.load(f'Images/Player/Ship{self.ship_index}/Normal.png'), 0.75)
-		self.shoot_image = pygame.transform.scale_by(pygame.image.load(f'Images/Player/Ship{self.ship_index}/Shoot.png'), 0.75)
-		self.thruster_image = pygame.transform.scale_by(pygame.image.load(f'Images/Player/Ship{self.ship_index}/Thruster.png'), 0.75)
+		self.og_image = pygame.transform.scale_by(pygame.image.load(f'Images/Player/Ship{self.ship_index}/Normal.png'), 0.5).convert_alpha()
+		self.shoot_image = pygame.transform.scale_by(pygame.image.load(f'Images/Player/Ship{self.ship_index}/Shoot.png'), 0.5).convert_alpha()
+		self.thruster_image = pygame.transform.scale_by(pygame.image.load(f'Images/Player/Ship{self.ship_index}/Thruster.png'), 0.5).convert_alpha()
+		self.blink_image = pygame.transform.scale_by(pygame.image.load(f'Images/Player/Ship{self.ship_index}/Blink.png'), 0.5).convert_alpha()
+		self.break_images = [pygame.transform.scale_by(pygame.image.load(f'Images/Player/Ship{self.ship_index}/Break/Break{i}.png'), 0.5).convert_alpha() for i in range(3)]
+		self.particle_images = [pygame.transform.scale_by(pygame.image.load(f'Images/Player/Ship{self.ship_index}/Break/Particle{i}.png'), 0.5).convert_alpha() for i in range(3)]
 
 		self.image = self.og_image
 		self.rect = self.image.get_rect(center = (CENTER_X, CENTER_Y))
@@ -257,15 +274,16 @@ class Player(pygame.sprite.Sprite):
 		# Direction
 		if self.fire_buffer != 0: self.rotate_to(mouse_pos, self.og_image)
 		if self.fire_buffer == 0: self.rotate_to(mouse_pos, self.shoot_image)
-		if keys_pressed[pygame.K_w] and randint(0, 2) == 0: self.rotate_to(mouse_pos, self.thruster_image)
+		if keys_pressed[pygame.K_w] and randint(0, 1) == 0: self.rotate_to(mouse_pos, self.thruster_image)
+		if self.blink_index == 1: self.rotate_to(mouse_pos, self.blink_image)
 
 		if mouse_pressed or keys_pressed[pygame.K_SPACE]: self.shoot(dt)
 		elif not mouse_pressed and not keys_pressed[pygame.K_SPACE]: self.set_fire_rate()
 
 		# Collisions
-		if pygame.sprite.spritecollide(self, self.game.lemonoids, False, pygame.sprite.collide_rect):
+		if pygame.sprite.spritecollide(self, self.game.lemonoids, False, pygame.sprite.collide_rect) and not self.collided and not self.dead:
 
-			if pygame.sprite.spritecollide(self, self.game.lemonoids, False, pygame.sprite.collide_mask) and not self.collided:
+			if pygame.sprite.spritecollide(self, self.game.lemonoids, False, pygame.sprite.collide_mask):
 
 				self.hit()
 				self.collided = True
@@ -275,9 +293,63 @@ class Player(pygame.sprite.Sprite):
 	def hit(self) -> None:
 
 		self.lives -= 1
-		if self.lives <= 0: self.game.game_over()
-		self.game.respawn()
+		self.death_animation()
+		self.dead = True
+
+	def death_animation(self) -> None:
+
 		self.game.explosions.add(Explosion(type = 0, pos = self.pos, game = self.game, frames = self.game.explosion_frames))
+
+		for i in range(3): 
+			 
+			self.game.particles.add(
+
+				Particle(
+					start_pos = self.pos, 
+			 		angle = 120 * (i + 1),
+					image = self.break_images[i % len(self.break_images)], 
+					move_speed = randint(100, 200), 
+					rotation_speed = randint(100, 1000),
+					fade_speed = 50,
+					game = self.game
+				)
+
+			)
+
+		for i in range(randint(len(self.particle_images), len(self.particle_images) * 16)): 
+			
+			self.game.particles.add(
+
+				Particle(
+					start_pos = self.pos,
+			 		angle = randint(0, 360),
+					image = self.particle_images[i % len(self.particle_images)], 
+					move_speed = randint(100, 200), 
+					rotation_speed = randint(100, 1000),
+					fade_speed = 150,
+					game = self.game
+				)
+
+			)
+
+		self.game.shake_offset = (cos(self.angle) * 16, sin(self.angle) * 16)
+
+		for i in range(self.EXPLOSION_VEL): self.game.shake_offsets.append((1, 1))
+
+		self.game.shake_offsets.append((-1.8, -1.8))
+		for i in range(self.EXPLOSION_VEL): self.game.shake_offsets.append((1, 1))
+
+		for i in range(16):
+			
+			self.game.shake_offsets.append((uniform(-0.5, -0.8), uniform(-0.5, -0.8)))
+			for i in range(self.EXPLOSION_VEL): self.game.shake_offsets.append((1, 1))
+
+		self.game.shake_offsets.append((0, 0))
+		
+		self.death_time = pygame.time.get_ticks()
+
+	def blink(self) -> None:
+		self.blink_index = (self.blink_index % 2) + 1
 
 	def wrap_around(self) -> None:
 
@@ -329,9 +401,14 @@ class Player(pygame.sprite.Sprite):
 
 	def respawn(self) -> None:
 
+		self.game.respawn()
 		self.pos = pygame.math.Vector2((CENTER_X, CENTER_Y))
 		self.x_vel, self.y_vel, self.angle = 0, 0, 0
 		self.collided = False
+		self.dead = False
+		self.death_time = 0
+		self.blink_index = 0
+		pygame.time.set_timer(self.BLINK_TIMER, self.BLINK_FREQUENCY, 6)
 
 	def reset(self) -> None:
 
@@ -340,6 +417,9 @@ class Player(pygame.sprite.Sprite):
 		self.pos = pygame.math.Vector2((CENTER_X, CENTER_Y))
 		self.x_vel, self.y_vel, self.angle = 0, 0, 0
 		self.collided = False
+		self.dead = False
+		self.death_time = 0
+		self.blink_index = 0
 		self.lasers_fired.empty()
 
 class Crosshair(pygame.sprite.Sprite):
@@ -388,11 +468,11 @@ class Laser(pygame.sprite.Sprite):
 
 		super().__init__()
 		
+		self.laser_index = laser_index
 		self.game = game
 		self.ANGLE = angle
-		self.SPEED = 1000
+		self.SPEEDS = {0: 1000}
 		self.collided = 0
-		self.laser_index = laser_index
 
 		self.image = pygame.transform.rotate(pygame.transform.scale_by(pygame.image.load(f'Images/Laser/Laser{self.laser_index}.png'), 0.5), self.ANGLE).convert_alpha()
 		self.hit_image = pygame.transform.rotate(pygame.transform.scale_by(pygame.image.load(f'Images/Laser/Hit.png'), 0.5), self.ANGLE).convert_alpha()
@@ -420,8 +500,8 @@ class Laser(pygame.sprite.Sprite):
 
 	def move(self, dt: int | float) -> None:
 
-		x = cos(radians(self.ANGLE)) * self.SPEED * dt
-		y = sin(radians(self.ANGLE)) * self.SPEED * dt
+		x = cos(radians(self.ANGLE)) * self.SPEEDS[self.laser_index] * dt
+		y = sin(radians(self.ANGLE)) * self.SPEEDS[self.laser_index] * dt
 		self.pos += pygame.math.Vector2((x, -y)) + pygame.math.Vector2(self.game.shake_offset)
 
 	def hit(self) -> None:
@@ -450,6 +530,7 @@ class Lemonoid(pygame.sprite.Sprite):
 		self.size = size
 
 		self.og_image = pygame.transform.scale_by(pygame.transform.rotate(pygame.image.load('Images/Lemonoid/Lemonoid.png'), self.angle), self.size * 0.75).convert_alpha()
+		self.particle_images = [pygame.transform.scale_by(pygame.image.load(f'Images/Lemonoid/Break/Particle{i}.png'), 0.5).convert_alpha() for i in range(3)]
 		self.image = self.og_image
 		if self.size == 1: self.rect = self.image.get_rect(center = (CENTER_X + cos(radians(self.angle)) * WIDTH, CENTER_Y - sin(radians(self.angle)) * WIDTH))
 		elif self.size != 1: self.rect = self.image.get_rect(center = pos)
@@ -515,9 +596,6 @@ class Lemonoid(pygame.sprite.Sprite):
 
 	def add_shake_offsets(self) -> None:
 
-		#radians = (atan2(-(self.game.player.sprite.pos.x - self.pos.x), self.game.player.sprite.pos.y - self.pos.y)) % 2 * pi
-
-		#self.game.shake_offset = (cos(degrees(radians)) * 16, sin(degrees(radians)) * 16)
 		self.game.shake_offset = (cos(self.game.player.sprite.angle) * 16, sin(self.game.player.sprite.angle) * 16)
 
 		for i in range(self.EXPLOSION_VEL): self.game.shake_offsets.append((1, 1))
@@ -566,20 +644,53 @@ class Lemonoid(pygame.sprite.Sprite):
 		if self.size < (1 / 2 / 2 / 2):
 
 			self.game.add_score(5)
+
+			for i in range(randint(len(self.particle_images), len(self.particle_images) * 2)): 
+			
+				self.game.particles.add(
+
+					Particle(
+						start_pos = self.pos,
+						angle = randint(0, 360),
+						image = self.particle_images[i % len(self.particle_images)], 
+						move_speed = randint(100, 200), 
+						rotation_speed = randint(100, 1000),
+						fade_speed = 200,
+						game = self.game
+					)
+
+				)
+
 			self.kill()
 
 		else:
 
 			self.game.lemonoids.add(
-				Lemonoid(pos = self.pos, angle = self.DIRECTION - 60, max_health = 8 if self.size == (1 / 2) else 4 if self.size == (1 / 2 / 2) else 1, move_speed = self.MOVE_SPEED * 1.5, size = self.size, game = self.game),
-				Lemonoid(pos = self.pos, angle = self.DIRECTION, max_health = 8 if self.size == (1 / 2) else 4 if self.size == (1 / 2 / 2) else 1, move_speed = self.MOVE_SPEED * 1.5, size = self.size, game = self.game),
-				Lemonoid(pos = self.pos, angle = self.DIRECTION + 60, max_health = 8 if self.size == (1 / 2) else 4 if self.size == (1 / 2 / 2) else 1, move_speed = self.MOVE_SPEED * 1.5, size = self.size, game = self.game)
+				Lemonoid(pos = self.pos, angle = self.DIRECTION - 60, max_health = 4 if self.size == (1 / 2) else 2 if self.size == (1 / 2 / 2) else 1, move_speed = self.MOVE_SPEED * 1.5, size = self.size, game = self.game),
+				Lemonoid(pos = self.pos, angle = self.DIRECTION, max_health = 4 if self.size == (1 / 2) else 2 if self.size == (1 / 2 / 2) else 1, move_speed = self.MOVE_SPEED * 1.5, size = self.size, game = self.game),
+				Lemonoid(pos = self.pos, angle = self.DIRECTION + 60, max_health = 4 if self.size == (1 / 2) else 2 if self.size == (1 / 2 / 2) else 1, move_speed = self.MOVE_SPEED * 1.5, size = self.size, game = self.game)
 			)
 			
 			if self.size != (1 / 2 / 2 / 2):
 
 				self.health_bar.sprite.segment.empty()
 				self.health_bar.empty()
+
+			for i in range(randint(len(self.particle_images), len(self.particle_images) * 4)): 
+			
+				self.game.particles.add(
+
+					Particle(
+						start_pos = self.pos,
+						angle = randint(0, 360),
+						image = self.particle_images[i % len(self.particle_images)], 
+						move_speed = randint(100, 200), 
+						rotation_speed = randint(100, 1000),
+						fade_speed = 150,
+						game = self.game
+					)
+
+				)
 
 			self.kill()
 
@@ -712,6 +823,59 @@ class Health_Bar(pygame.sprite.Sprite):
 		self.pos.x = (self.parent.rect.topleft[0] + self.image.get_width() + (2 * self.SIZE)) - self.image.get_width() * (((1 - self.parent.health_percent) * 2) % 1)
 		self.pos.y = self.parent.rect.topleft[1]
 
+class Particle(pygame.sprite.Sprite):
+
+	def __init__(self, start_pos: tuple | pygame.math.Vector2, angle: int | float, image: pygame.surface.Surface, move_speed: int, rotation_speed: int, fade_speed: int, game: Game) -> None:
+
+		super().__init__()
+		
+		self.game = game
+		self.ANGLE = angle
+		self.MOVE_SPEED = move_speed
+		self.ROTATE_SPEED = rotation_speed
+		self.FADE_SPEED = fade_speed
+		
+		self.rotation_angle = 0
+		self.alpha = 256
+
+		self.og_image = image
+		self.image = self.og_image
+
+		self.rect = self.image.get_rect(center = start_pos)
+		self.pos = pygame.math.Vector2(self.rect.center)
+
+	def update(self, dt: int | float) -> None:
+
+		self.rect.center = self.pos
+
+		self.move(dt)
+		self.rotate(dt)
+		self.fade(dt)
+		self.input()
+
+	def input(self) -> None:
+
+		if self.pos.y <= 0 - (self.image.get_height() / 2) or self.pos.y >= HEIGHT + (self.image.get_height() / 2): self.kill()
+		if self.pos.x <= 0 - (self.image.get_width() / 2) or self.pos.x >= WIDTH + (self.image.get_width() / 2): self.kill()
+
+	def move(self, dt: int | float) -> None:
+
+		x = cos(radians(self.ANGLE)) * self.MOVE_SPEED * dt
+		y = sin(radians(self.ANGLE)) * self.MOVE_SPEED * dt
+		self.pos += pygame.math.Vector2((x, -y)) + pygame.math.Vector2(self.game.shake_offset)
+
+	def rotate(self, dt: int | float) -> None:
+
+		self.rotation_angle = (self.rotation_angle % 360) + self.ROTATE_SPEED * dt
+		self.image = pygame.transform.rotate(self.og_image, self.rotation_angle).convert_alpha()
+		self.rect = self.image.get_rect(center = self.pos)
+
+	def fade(self, dt: float | int) -> None:
+
+		self.alpha -= self.FADE_SPEED * dt
+		self.image.set_alpha(self.alpha)
+		if self.alpha <= 0: self.kill()
+
 def main():
 
 	game = Game()
@@ -721,6 +885,7 @@ def main():
 	lemonoids = game.lemonoids
 	explosions = game.explosions
 	crosshair = game.crosshair
+	particles = game.particles
 
 	pygame.display.set_caption('Lemonoids')
 
@@ -743,8 +908,11 @@ def main():
 				if event.type == game.LEMONOID_TIMER:
 
 					angle = randint(0, 360)
-					new_lemonoid = Lemonoid(angle = angle, max_health = 20, move_speed = 75, size = 1, game = game)
+					new_lemonoid = Lemonoid(angle = angle, max_health = 10, move_speed = 75, size = 1, game = game)
 					lemonoids.add(new_lemonoid)
+
+				if event.type == player.sprite.BLINK_TIMER:
+					player.sprite.blink()
 
 			if game.get_state() == game.S_GAME_OVER:
 
@@ -761,6 +929,10 @@ def main():
 			game.update()
 			if game.shake_offsets: game.shake(game.shake_offsets.pop(0))
 
+			# Particles
+			particles.update(dt)
+			particles.draw(screen)
+
 			# Explosions
 			explosions.update(dt)
 			explosions.draw(screen)
@@ -771,7 +943,18 @@ def main():
 
 			# Player
 			player.update(dt)
-			player.draw(screen)
+
+			if not player.sprite.dead:
+
+				player.draw(screen)
+
+			elif player.sprite.dead:
+
+				if pygame.time.get_ticks() - player.sprite.death_time >= 1500:
+						
+					if player.sprite.lives <= 0: game.game_over()
+					else: player.sprite.respawn()
+
 			
 			# Lemonoids
 			lemonoids.draw(screen)
@@ -788,4 +971,4 @@ def main():
 		pygame.display.update()
 		clock.tick(FPS)
 
-main()
+if __name__ == '__main__': main()
