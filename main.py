@@ -567,7 +567,8 @@ class Lemonoid(pygame.sprite.Sprite):
 				
 			if pygame.sprite.spritecollide(self, self.game.player.sprite.lasers_fired, False, pygame.sprite.collide_mask) and not self.colliding: 
 				
-				self.hit()
+				laser = pygame.sprite.spritecollide(self, self.game.player.sprite.lasers_fired, False, pygame.sprite.collide_mask)
+				self.hit(pygame.math.Vector2(self.rect.topleft) + pygame.math.Vector2(pygame.sprite.collide_mask(self, laser[0])))
 				self.colliding = True
 
 			else: self.colliding = False
@@ -610,7 +611,7 @@ class Lemonoid(pygame.sprite.Sprite):
 
 		self.game.shake_offsets.append((0, 0))
 
-	def hit(self) -> None:
+	def hit(self, pos: pygame.math.Vector2 | tuple) -> None:
 
 		if self.health > 0:
 
@@ -620,6 +621,26 @@ class Lemonoid(pygame.sprite.Sprite):
 			array = pygame.PixelArray(self.image)
 			array.replace((247, 255, 0), (255, 255, 255))
 			array.close()
+
+			x = self.pos.x - pos.x
+			y = self.pos.x - pos.y
+			angle = int(degrees(atan2(-y, x) % (2 * pi)))
+			
+			for i in range(randint(len(self.particle_images), len(self.particle_images) * 2)): 
+			
+				self.game.particles.add(
+
+					Particle( 
+						start_pos = pos,
+						angle = randint(angle - 15, angle + 15),
+						image = self.particle_images[i % len(self.particle_images)], 
+						move_speed = randint(250, 500), 
+						rotation_speed = randint(100, 1000),
+						fade_speed = 200,
+						game = self.game
+					)
+
+				)
 		
 		if self.health <= 0: self.death()
 
