@@ -2,7 +2,6 @@ import pygame
 
 from sys import exit
 from time import time
-from threading import Thread
 from math import atan2, cos, sin, degrees, radians, pi
 from random import randint, uniform, choice
 
@@ -43,7 +42,7 @@ class Game:
 		self.explosion_frames = [pygame.transform.scale_by(pygame.transform.rotate(pygame.image.load(f'Images/Explosion/God-Rays.png'), step), 0.75).convert_alpha() for step in range(0, int(360 / 20), 2)]
 
 		self.player = pygame.sprite.GroupSingle(Player(game = self))
-		self.crosshair = pygame.sprite.GroupSingle(Crosshair(type = self.player.sprite.ship_index, game = self))
+		self.cursor = pygame.sprite.GroupSingle(Cursor(game = self))
 		self.lemonoids = pygame.sprite.Group()
 		for i in range(3): self.lemonoids.add(Lemonoid(angle = randint(0, 360), max_health = 10, move_speed = 75, size = 1, game = self))
 		self.explosions = pygame.sprite.Group()
@@ -236,6 +235,7 @@ class Player(pygame.sprite.Sprite):
 		self.dead = False
 		self.death_time = 0
 		self.blink_index = 0
+		self.invincible = True
 
 		self.og_image = pygame.transform.scale_by(pygame.image.load(f'Images/Player/Ship{self.ship_index}/Normal.png'), 0.5).convert_alpha()
 		self.shoot_image = pygame.transform.scale_by(pygame.image.load(f'Images/Player/Ship{self.ship_index}/Shoot.png'), 0.5).convert_alpha()
@@ -281,7 +281,7 @@ class Player(pygame.sprite.Sprite):
 		elif not mouse_pressed and not keys_pressed[pygame.K_SPACE]: self.set_fire_rate()
 
 		# Collisions
-		if pygame.sprite.spritecollide(self, self.game.lemonoids, False, pygame.sprite.collide_rect) and not self.collided and not self.dead:
+		if pygame.sprite.spritecollide(self, self.game.lemonoids, False, pygame.sprite.collide_rect) and not self.collided and not self.dead and not self.invincible:
 
 			if pygame.sprite.spritecollide(self, self.game.lemonoids, False, pygame.sprite.collide_mask):
 
@@ -422,35 +422,39 @@ class Player(pygame.sprite.Sprite):
 		self.blink_index = 0
 		self.lasers_fired.empty()
 
-class Crosshair(pygame.sprite.Sprite):
+class Cursor(pygame.sprite.Sprite):
 
-	def __init__(self, type: int, game: Game) -> None:
+	def __init__(self, game: Game) -> None:
 
 		super().__init__()
 
 		self.game = game
 		self.ROTATE_SPEED = 500
 		self.angle = 0
-		
-		self.unfocus_image = pygame.transform.scale_by(pygame.image.load(f'Images/Crosshair/Ship{type}-Unfocus.png'), 3).convert_alpha()
-		self.focus_image = pygame.transform.scale_by(pygame.image.load(f'Images/Crosshair/Ship{type}-Focus.png'), 3).convert_alpha()
-		self.focussed = False
-		self.images = [self.unfocus_image, self.focus_image]
-		self.image = self.images[self.focussed]
+		self.index = {self.game.S_PLAY: 1, self.game.S_GAME_OVER: 0}[self.game.get_state()]
 
-		self.rect = self.image.get_rect(center = (0, 0))
-		self.pos = pygame.math.Vector2()
+		self.cursor_unfocus_image = pygame.transform.scale_by(pygame.image.load(f'Images/Cursor/Cursor/Unfocus.png'), 3).convert_alpha()
+		self.cursor_focus_image = pygame.transform.scale_by(pygame.image.load(f'Images/Cursor/Cursor/Focus.png'), 3).convert_alpha()
+		self.focussed = False
+		
+		self.crosshair_unfocus_image = pygame.transform.scale_by(pygame.image.load(f'Images/Cursor/Crosshair/Unfocus.png'), 3).convert_alpha()
+		self.crosshair_focus_image = pygame.transform.scale_by(pygame.image.load(f'Images/Cursor/Crosshair/Focus.png'), 3).convert_alpha()
+		self.focussed = False
+
+		self.images = [[self.cursor_unfocus_image, self.cursor_focus_image], [self.crosshair_unfocus_image, self.crosshair_focus_image]]
+		self.image = self.images[self.index][self.focussed]
+
+		self.rect = self.image.get_rect(center = pygame.mouse.get_pos())
+		self.pos = pygame.math.Vector2(self.rect.center)
 
 	def update(self, dt: float | int) -> None:
 
 		self.rect.center = self.pos
-		self.image = self.images[self.focussed]
+		self.index = {self.game.S_PLAY: 1, self.game.S_GAME_OVER: 0}[self.game.get_state()]
+		self.image = self.images[self.index][self.focussed]
 		self.input()
 
-		if self.focussed: 
-			
-			self.rotate(dt)
-			self.image = pygame.transform.rotate(self.images[self.focussed], self.angle).convert_alpha()
+		if self.focussed and self.game.get_state() == self.game.S_PLAY: self.rotate(dt)
 
 		self.rect = self.image.get_rect(center = self.pos)
 
@@ -460,7 +464,9 @@ class Crosshair(pygame.sprite.Sprite):
 		self.focussed = pygame.mouse.get_pressed()[0]
 
 	def rotate(self, dt: float | int) -> None:
+
 		self.angle = (self.angle % 360) + self.ROTATE_SPEED * dt
+		self.image = pygame.transform.rotate(self.images[self.index][self.focussed], self.angle).convert_alpha()
 
 class Laser(pygame.sprite.Sprite):
 
@@ -563,12 +569,13 @@ class Lemonoid(pygame.sprite.Sprite):
 
 	def input(self) -> None:
 
-		if pygame.sprite.spritecollide(self, self.game.player.sprite.lasers_fired, False, pygame.sprite.collide_rect): 
+		if pygame.sprite.spritecollide(self, self.game.player.sprite.lasers_fired, False, pygame.sprite.collide_rect):
+
+			collided_lasers = pygame.sprite.spritecollide(self, self.game.player.sprite.lasers_fired, False, pygame.sprite.collide_mask)
 				
-			if pygame.sprite.spritecollide(self, self.game.player.sprite.lasers_fired, False, pygame.sprite.collide_mask) and not self.colliding: 
+			if collided_lasers and not self.colliding: 
 				
-				laser = pygame.sprite.spritecollide(self, self.game.player.sprite.lasers_fired, False, pygame.sprite.collide_mask)
-				self.hit(pygame.math.Vector2(self.rect.topleft) + pygame.math.Vector2(pygame.sprite.collide_mask(self, laser[0])))
+				self.hit(relative_collision_pos = pygame.sprite.collide_mask(self, collided_lasers[0]))
 				self.colliding = True
 
 			else: self.colliding = False
@@ -595,46 +602,74 @@ class Lemonoid(pygame.sprite.Sprite):
 	def shrink(self, percentage: int | float) -> None:
 		self.og_image = pygame.transform.scale_by(self.og_image, percentage).convert_alpha()
 
-	def add_shake_offsets(self) -> None:
+	def death_animation(self, size: int | float) -> None:
 
-		self.game.shake_offset = (cos(self.game.player.sprite.angle) * 16, sin(self.game.player.sprite.angle) * 16)
+		# Explosion
+		self.game.explosions.add(Explosion(type = 0 if size == 1 else 1, pos = self.pos, frames = self.game.explosion_frames, game = self.game))
 
-		for i in range(self.EXPLOSION_VEL): self.game.shake_offsets.append((1, 1))
+		# Shake
 
-		self.game.shake_offsets.append((-1.8, -1.8))
-		for i in range(self.EXPLOSION_VEL): self.game.shake_offsets.append((1, 1))
+		if size == 1:
 
-		for i in range(16):
-			
-			self.game.shake_offsets.append((uniform(-0.5, -0.8), uniform(-0.5, -0.8)))
+			self.game.shake_offset = (cos(self.game.player.sprite.angle) * 16, sin(self.game.player.sprite.angle) * 16)
+
 			for i in range(self.EXPLOSION_VEL): self.game.shake_offsets.append((1, 1))
 
-		self.game.shake_offsets.append((0, 0))
+			self.game.shake_offsets.append((-1.8, -1.8))
+			for i in range(self.EXPLOSION_VEL): self.game.shake_offsets.append((1, 1))
 
-	def hit(self, pos: pygame.math.Vector2 | tuple) -> None:
+			for i in range(16):
+				
+				self.game.shake_offsets.append((uniform(-0.5, -0.8), uniform(-0.5, -0.8)))
+				for i in range(self.EXPLOSION_VEL): self.game.shake_offsets.append((1, 1))
+
+			self.game.shake_offsets.append((0, 0))
+
+		# Particles
+		
+		for i in range(int(self.EXPLOSION_VEL * size)): 
+			
+				self.game.particles.add(
+
+					Particle(
+						start_pos = self.pos,
+						angle = randint(0, 360),
+						image = self.particle_images[i % len(self.particle_images)], 
+						move_speed = randint(200, 500),
+						rotation_speed = randint(200, 1000),
+						fade_speed = 100 * (1 / size),
+						game = self.game
+					)
+
+				)	
+
+	def hit(self, relative_collision_pos: tuple | pygame.math.Vector2) -> None:
 
 		if self.health > 0:
 
 			self.health -= self.DAMAGE
 			if SFX: self.hit_sfx.play()
 			self.game.add_score(2)
+			
 			array = pygame.PixelArray(self.image)
 			array.replace((247, 255, 0), (255, 255, 255))
 			array.close()
 
-			x = self.pos.x - pos.x
-			y = self.pos.x - pos.y
-			angle = int(degrees(atan2(-y, x) % (2 * pi)))
+			screen_collision_pos = (self.rect.topleft[0] + relative_collision_pos[0], self.rect.topleft[1] + relative_collision_pos[1])
+
+			x = self.pos.x - screen_collision_pos[0]
+			y = self.pos.y - screen_collision_pos[1]
+			angle = (int(degrees(atan2(-y, x) % (2 * pi))) + 180) % 360
 			
-			for i in range(randint(len(self.particle_images), len(self.particle_images) * 2)): 
+			for i in range(randint(len(self.particle_images), len(self.particle_images))): 
 			
 				self.game.particles.add(
 
 					Particle( 
-						start_pos = pos,
+						start_pos = screen_collision_pos,
 						angle = randint(angle - 15, angle + 15),
 						image = self.particle_images[i % len(self.particle_images)], 
-						move_speed = randint(250, 500), 
+						move_speed = randint(50, 100) * self.MOVE_SPEED,
 						rotation_speed = randint(100, 1000),
 						fade_speed = 200,
 						game = self.game
@@ -649,14 +684,13 @@ class Lemonoid(pygame.sprite.Sprite):
 		if self.size == 1:
 
 			if SFX: self.explosion_sfx.play()
-			self.game.explosions.add(Explosion(type = 0, pos = self.pos, frames = self.game.explosion_frames, game = self.game))
-			self.add_shake_offsets()
+			self.death_animation(self.size)
 			self.game.add_score(100)
 
 		elif self.size < 1:
 
 			if SFX: self.explosion_sfx_2.play()
-			self.game.explosions.add(Explosion(type = 1, pos = self.pos, game = self.game))
+			self.death_animation(self.size)
 			self.game.add_score(25)
 
 		self.size /= 2
@@ -665,22 +699,7 @@ class Lemonoid(pygame.sprite.Sprite):
 		if self.size < (1 / 2 / 2 / 2):
 
 			self.game.add_score(5)
-
-			for i in range(randint(len(self.particle_images), len(self.particle_images) * 2)): 
-			
-				self.game.particles.add(
-
-					Particle(
-						start_pos = self.pos,
-						angle = randint(0, 360),
-						image = self.particle_images[i % len(self.particle_images)], 
-						move_speed = randint(100, 200), 
-						rotation_speed = randint(100, 1000),
-						fade_speed = 200,
-						game = self.game
-					)
-
-				)
+			self.death_animation(self.size)
 
 			self.kill()
 
@@ -696,22 +715,6 @@ class Lemonoid(pygame.sprite.Sprite):
 
 				self.health_bar.sprite.segment.empty()
 				self.health_bar.empty()
-
-			for i in range(randint(len(self.particle_images), len(self.particle_images) * 4)): 
-			
-				self.game.particles.add(
-
-					Particle(
-						start_pos = self.pos,
-						angle = randint(0, 360),
-						image = self.particle_images[i % len(self.particle_images)], 
-						move_speed = randint(100, 200), 
-						rotation_speed = randint(100, 1000),
-						fade_speed = 150,
-						game = self.game
-					)
-
-				)
 
 			self.kill()
 
@@ -905,7 +908,7 @@ def main():
 	lasers_fired = player.sprite.lasers_fired
 	lemonoids = game.lemonoids
 	explosions = game.explosions
-	crosshair = game.crosshair
+	cursor = game.cursor
 	particles = game.particles
 
 	pygame.display.set_caption('Lemonoids')
@@ -981,13 +984,13 @@ def main():
 			lemonoids.draw(screen)
 			lemonoids.update(dt)
 
-			# Crosshair
-			crosshair.update(dt)
-			crosshair.draw(screen)
-
 		# Text
 		text.update()
 		[screen.blit(line[0], line[1]) for line in text.texts]
+
+		# Crosshair
+		cursor.update(dt)
+		cursor.draw(screen)
 
 		pygame.display.update()
 		clock.tick(FPS)
