@@ -3,7 +3,7 @@ import pygame
 from sys import exit
 from time import time
 from math import atan2, cos, sin, degrees, radians, pi
-from random import randint, uniform, choice
+from random import randint, uniform
 
 from constants import *
 
@@ -44,7 +44,7 @@ class Game:
 		self.player = pygame.sprite.GroupSingle(Player(game = self))
 		self.cursor = pygame.sprite.GroupSingle(Cursor(game = self))
 		self.lemonoids = pygame.sprite.Group()
-		for i in range(3): self.lemonoids.add(Lemonoid(angle = randint(0, 360), max_health = 10, move_speed = 75, size = 1, game = self))
+		for i in range(3): self.lemonoids.add(Lemonoid(angle = randint(0, 360), move_speed = 75, size = 1, game = self))
 		self.explosions = pygame.sprite.Group()
 		self.text = Text(game = self)
 		self.particles = pygame.sprite.Group()
@@ -518,16 +518,17 @@ class Laser(pygame.sprite.Sprite):
 		
 class Lemonoid(pygame.sprite.Sprite):
 
-	def __init__(self, angle: int, max_health: int, move_speed: int, size: int | float, game: Game, pos: tuple = None) -> None:
+	def __init__(self, angle: int, move_speed: int, size: int | float, game: Game, pos: tuple = None) -> None:
 
 		super().__init__()
 
 		self.game = game
+		self.HEALTHS = {1: 10, 2: 4, 3: 2, 4: 1} # size: health
 		self.MOVE_SPEED = move_speed
-		self.ROTATE_SPEED = 100 / size
+		self.ROTATE_SPEED = 100 * size
 		self.DIRECTION = angle
 		self.DAMAGE = 1
-		self.MAX_HEALTH = max_health
+		self.MAX_HEALTH = self.HEALTHS[size]
 		self.EXPLOSION_VEL = 8
 		
 		self.angle = angle
@@ -535,7 +536,7 @@ class Lemonoid(pygame.sprite.Sprite):
 		self.colliding = False
 		self.size = size
 
-		self.og_image = pygame.transform.scale_by(pygame.transform.rotate(pygame.image.load('Images/Lemonoid/Lemonoid.png'), self.angle), self.size * 0.75).convert_alpha()
+		self.og_image = pygame.transform.scale_by(pygame.transform.rotate(pygame.image.load('Images/Lemonoid/Lemonoid.png'), self.angle), (1 / self.size) * 0.75).convert_alpha()
 		self.particle_images = [pygame.transform.scale_by(pygame.image.load(f'Images/Lemonoid/Break/Particle{i}.png'), 0.5).convert_alpha() for i in range(3)]
 		self.image = self.og_image
 		if self.size == 1: self.rect = self.image.get_rect(center = (CENTER_X + cos(radians(self.angle)) * WIDTH, CENTER_Y - sin(radians(self.angle)) * WIDTH))
@@ -548,14 +549,14 @@ class Lemonoid(pygame.sprite.Sprite):
 		self.explosion_sfx_2 = pygame.mixer.Sound('Audio/SFX/Lemonoid/Explosion2.wav')
 
 		self.health_bar = pygame.sprite.GroupSingle()
-		if self.size != (1 / 2 / 2 / 2): self.health_bar.add(Health_Bar(offset = (0, 0) if self.size != (1 / 2 / 2) else (0, -50), size = self.size if self.size > 0.5 else 0.5, parent = self))
+		if self.size != 4: self.health_bar.add(Health_Bar(offset = (0, 0) if self.size != (1 / 2 / 2) else (0, -50), size = (1 / self.size) if self.size < 2 else (1 / self.size), parent = self))
 
 	def update(self, dt: float | int) -> None:
 
 		self.rect.center = self.pos
 		self.mask = pygame.mask.from_surface(self.image)
 
-		if self.size != (1 / 2 / 2 / 2):
+		if self.size != 4:
 
 			self.health_bar.update()
 			self.health_bar.draw(screen)
@@ -627,7 +628,7 @@ class Lemonoid(pygame.sprite.Sprite):
 
 		# Particles
 		
-		for i in range(int(self.EXPLOSION_VEL * size)): 
+		for i in range(int(self.EXPLOSION_VEL)): 
 			
 				self.game.particles.add(
 
@@ -637,7 +638,7 @@ class Lemonoid(pygame.sprite.Sprite):
 						image = self.particle_images[i % len(self.particle_images)], 
 						move_speed = randint(200, 500),
 						rotation_speed = randint(200, 1000),
-						fade_speed = 100 * (1 / size),
+						fade_speed = 100 * size,
 						game = self.game
 					)
 
@@ -669,9 +670,9 @@ class Lemonoid(pygame.sprite.Sprite):
 						start_pos = screen_collision_pos,
 						angle = randint(angle - 15, angle + 15),
 						image = self.particle_images[i % len(self.particle_images)], 
-						move_speed = randint(50, 100) * self.MOVE_SPEED,
+						move_speed = randint(100, 200),
 						rotation_speed = randint(100, 1000),
-						fade_speed = 200,
+						fade_speed = 400,
 						game = self.game
 					)
 
@@ -687,16 +688,16 @@ class Lemonoid(pygame.sprite.Sprite):
 			self.death_animation(self.size)
 			self.game.add_score(100)
 
-		elif self.size < 1:
+		elif self.size > 1:
 
 			if SFX: self.explosion_sfx_2.play()
 			self.death_animation(self.size)
 			self.game.add_score(25)
 
-		self.size /= 2
-		self.shrink(self.size)
+		self.size += 1
+		self.shrink(1 / self.size)
 
-		if self.size < (1 / 2 / 2 / 2):
+		if self.size > 4:
 
 			self.game.add_score(5)
 			self.death_animation(self.size)
@@ -705,13 +706,21 @@ class Lemonoid(pygame.sprite.Sprite):
 
 		else:
 
-			self.game.lemonoids.add(
-				Lemonoid(pos = self.pos, angle = self.DIRECTION - 60, max_health = 4 if self.size == (1 / 2) else 2 if self.size == (1 / 2 / 2) else 1, move_speed = self.MOVE_SPEED * 1.5, size = self.size, game = self.game),
-				Lemonoid(pos = self.pos, angle = self.DIRECTION, max_health = 4 if self.size == (1 / 2) else 2 if self.size == (1 / 2 / 2) else 1, move_speed = self.MOVE_SPEED * 1.5, size = self.size, game = self.game),
-				Lemonoid(pos = self.pos, angle = self.DIRECTION + 60, max_health = 4 if self.size == (1 / 2) else 2 if self.size == (1 / 2 / 2) else 1, move_speed = self.MOVE_SPEED * 1.5, size = self.size, game = self.game)
-			)
+			for i in range(3):
+
+				self.game.lemonoids.add(
+
+					Lemonoid(
+						pos = self.pos,
+						angle = self.DIRECTION + ((60 - randint(0, 30)) * (i - 1)), 
+						move_speed = self.MOVE_SPEED * 1.5,
+						size = self.size, 
+						game = self.game
+					)
+
+				)
 			
-			if self.size != (1 / 2 / 2 / 2):
+			if self.size != 4:
 
 				self.health_bar.sprite.segment.empty()
 				self.health_bar.empty()
@@ -932,7 +941,7 @@ def main():
 				if event.type == game.LEMONOID_TIMER:
 
 					angle = randint(0, 360)
-					new_lemonoid = Lemonoid(angle = angle, max_health = 10, move_speed = 75, size = 1, game = game)
+					new_lemonoid = Lemonoid(angle = angle, move_speed = 75, size = 1, game = game)
 					lemonoids.add(new_lemonoid)
 
 				if event.type == player.sprite.BLINK_TIMER:
@@ -988,7 +997,7 @@ def main():
 		text.update()
 		[screen.blit(line[0], line[1]) for line in text.texts]
 
-		# Crosshair
+		# Cursor
 		cursor.update(dt)
 		cursor.draw(screen)
 
