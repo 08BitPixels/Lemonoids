@@ -16,5 +16,5 @@ YELLOW = '#ffea00'
 RED = '#ff2600'
 
 # Audio
-SFX = False
+SFX = True
 MUSIC = False

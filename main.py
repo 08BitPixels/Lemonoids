@@ -1,9 +1,8 @@
 import pygame
 
-from sys import exit
 from time import time
 from math import atan2, cos, sin, degrees, radians, pi
-from random import randint, uniform
+from random import randint, uniform, choice
 
 from constants import *
 
@@ -97,7 +96,7 @@ class Game:
 		self.shake_offset = (0, 0)
 		self.shake_offsets.clear()
 		self.lemonoids.empty()
-		for i in range(3): self.lemonoids.add(Lemonoid(angle = randint(0, 360), max_health = 10, move_speed = 75, size = 1, game = self))
+		for i in range(3): self.lemonoids.add(Lemonoid(angle = randint(0, 360), move_speed = 75, size = 1, game = self))
 		pygame.time.set_timer(self.LEMONOID_TIMER, self.lemonoid_frequency)
 		self.explosions.empty()
 
@@ -216,7 +215,7 @@ class Player(pygame.sprite.Sprite):
 		self.game = game
 
 		# Constant Vars
-		self.SIZE = 0.5
+		self.SIZE = 2
 		self.ACCELERATION_VEL = 0.999
 		self.SPEED = 3
 		self.FIRE_RATE = 0
@@ -404,12 +403,15 @@ class Player(pygame.sprite.Sprite):
 			
 			if SFX: self.shoot_sfx.play()
 			self.lasers_fired.add(
+
 				Laser(
 					start_pos = self.pos, 
-		  			angle = self.angle + uniform(-(self.ACCURACIES[self.ship_index] / 2), self.ACCURACIES[self.ship_index] / 2), 
+		  			angle = self.angle + uniform(-(self.ACCURACIES[self.ship_index] / 2), self.ACCURACIES[self.ship_index] / 2),
+					size = self.SIZE,
 					laser_index = self.ship_index, 
 					game = self.game
 				)
+
 			)
 
 		self.fire_buffer -= round(100 * dt)
@@ -490,18 +492,19 @@ class Cursor(pygame.sprite.Sprite):
 
 class Laser(pygame.sprite.Sprite):
 
-	def __init__(self, start_pos: tuple, angle: int | float, laser_index: int, game: Game) -> None:
+	def __init__(self, start_pos: tuple, angle: int | float, size: int | float, laser_index: int, game: Game) -> None:
 
 		super().__init__()
 		
 		self.laser_index = laser_index
 		self.game = game
 		self.ANGLE = angle
-		self.SPEEDS = {0: 1000}
+		self.SIZE = size
+		self.SPEEDS = {0: 1000} # laser index: speed
 		self.collided = 0
 
-		self.image = pygame.transform.rotate(pygame.transform.scale_by(pygame.image.load(f'Images/Laser/Laser{self.laser_index}.png'), 0.5), self.ANGLE).convert_alpha()
-		self.hit_image = pygame.transform.rotate(pygame.transform.scale_by(pygame.image.load(f'Images/Laser/Hit.png'), 0.5), self.ANGLE).convert_alpha()
+		self.image = pygame.transform.rotate(pygame.transform.scale_by(pygame.image.load(f'Images/Laser/Laser{self.laser_index}.png'), self.SIZE), self.ANGLE).convert_alpha()
+		self.hit_image = pygame.transform.rotate(pygame.transform.scale_by(pygame.image.load(f'Images/Laser/Hit.png'), self.SIZE), self.ANGLE).convert_alpha()
 		self.mask = pygame.mask.from_surface(self.image)
 
 		self.rect = self.image.get_rect(center = start_pos)
@@ -561,8 +564,8 @@ class Lemonoid(pygame.sprite.Sprite):
 		self.size = size
 
 		# Images
-		self.og_image = pygame.transform.scale_by(pygame.transform.rotate(pygame.image.load('Images/Lemonoid/Lemonoid.png'), self.angle), self.SIZES[self.size] * 0.75).convert_alpha()
-		self.particle_images = [pygame.transform.scale_by(pygame.image.load(f'Images/Lemonoid/Break/Particle{i}.png'), 0.5).convert_alpha() for i in range(2)]
+		self.og_image = pygame.transform.rotate(pygame.transform.scale_by(pygame.image.load('Images/Lemonoid/Lemonoid.png'), self.SIZES[self.size] * 10), self.angle).convert_alpha()
+		self.particle_images = [pygame.image.load(f'Images/Lemonoid/Break/Particle{i}.png').convert_alpha() for i in range(2)]
 		self.image = self.og_image
 
 		# Rects, Vectors, Masks
@@ -640,18 +643,6 @@ class Lemonoid(pygame.sprite.Sprite):
 
 	def death_animation(self, size: int | float) -> None:
 
-		# Explosion
-		self.game.explosions.add(
-
-			Explosion(
-				type = 0 if size == 1 else 1, 
-			 	pos = self.pos, 
-				frames = self.game.explosion_frames, 
-				game = self.game
-			)
-
-		)
-
 		# Shake
 		if size == 1:
 
@@ -669,36 +660,49 @@ class Lemonoid(pygame.sprite.Sprite):
 
 			self.game.shake_offsets.append((0, 0))
 
+		# Explosion
+		self.game.explosions.add(
+
+			Explosion(
+				type = 0 if size == 1 else 1, 
+			 	pos = self.pos, 
+				frames = self.game.explosion_frames, 
+				game = self.game
+			)
+
+		)
+
 		# Particles
-		for i in range(int(50 / size)):
+		for i in range(int(25 / size)):
 			
-				self.game.particles.add(
+			self.game.particles.add(
 
-					Particle(
-						start_pos = self.pos,
-						angle = 360 / (50 / size) * i,
-						image = self.particle_images[i % len(self.particle_images)], 
-						move_speed = randint(100, 500) / size,
-						rotation_speed = randint(100, 1000) * size,
-						fade_speed = 500 * size,
-						game = self.game
-					)
+				Particle(
+					start_pos = self.pos,
+					angle = (360 / int(25 / size)) * i,
+					image = choice(self.particle_images), 
+					move_speed = randint(100, 500) / size,
+					rotation_speed = randint(100, 500) * size,
+					fade_speed = 100 * size,
+					game = self.game
+				)
 
-				)	
+			)	
 
 	def hit(self, relative_collision_pos: tuple | pygame.math.Vector2) -> None:
 
 		self.health -= self.DAMAGE
 
-		if self.health > 0:
+		# SFX
+		if SFX: self.hit_sfx.play()
+		self.game.add_score(5)
+		
+		# Flash Effect
+		array = pygame.PixelArray(self.image)
+		array.replace((255, 228, 0), (255, 255, 255))
+		array.close()
 
-			if SFX: self.hit_sfx.play()
-			self.game.add_score(5)
-			
-			# Flash Effect
-			array = pygame.PixelArray(self.image)
-			array.replace((247, 255, 0), (255, 255, 255))
-			array.close()
+		if self.health > 0:
 
 			# Position of Collision with Laser
 			screen_collision_pos = (self.rect.topleft[0] + relative_collision_pos[0], self.rect.topleft[1] + relative_collision_pos[1])
@@ -730,12 +734,6 @@ class Lemonoid(pygame.sprite.Sprite):
 
 		if self.size != 4:
 
-			# SFX
-			if SFX: 
-				
-				if self.size == 1: self.explosion_sfx.play()
-				else: self.explosion_sfx_2.play()
-
 			# New Lemonoids
 			for i in range(3):
 
@@ -755,7 +753,12 @@ class Lemonoid(pygame.sprite.Sprite):
 			self.health_bar.sprite.segment.empty()
 			self.health_bar.empty()
 
-		# Score, Animation
+		# Score, Animation, SFX
+		if SFX: 
+			
+			if self.size == 1: self.explosion_sfx.play()
+			else: self.explosion_sfx_2.play()
+
 		self.game.add_score(self.SCORES[self.size])
 		self.death_animation(self.size)
 		self.kill()
