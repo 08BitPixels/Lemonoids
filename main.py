@@ -38,7 +38,7 @@ class Game:
 		self.shake_offset = (0, 0)
 		self.shake_offsets = []
 
-		self.explosion_frames = [pygame.transform.scale_by(pygame.transform.rotate(pygame.image.load(f'Images/Explosion/God-Rays.png'), step), 0.75).convert_alpha() for step in range(0, int(360 / 20), 2)]
+		self.explosion_frames = [pygame.transform.scale_by(pygame.transform.rotate(pygame.image.load(f'Images/Explosion/God-Rays1.png'), step), 0.5).convert_alpha() for step in range(0, int(360 / 20), 2)]
 
 		self.player = pygame.sprite.GroupSingle(Player(game = self))
 		self.cursor = pygame.sprite.GroupSingle(Cursor(game = self))
