@@ -38,7 +38,7 @@ class Game:
 		self.shake_offset = (0, 0)
 		self.shake_offsets = []
 
-		self.explosion_frames = [pygame.transform.scale_by(pygame.transform.rotate(pygame.image.load(f'Images/Explosion/God-Rays1.png'), step), 0.5).convert_alpha() for step in range(0, int(360 / 20), 2)]
+		self.explosion_frames = [pygame.transform.scale_by(pygame.transform.rotate(pygame.image.load(f'Images/Explosion/God-Rays.png'), step), 0.5).convert_alpha() for step in range(0, int(360 / 20), 2)]
 
 		self.player = pygame.sprite.GroupSingle(Player(game = self))
 		self.cursor = pygame.sprite.GroupSingle(Cursor(game = self))
@@ -504,7 +504,7 @@ class Laser(pygame.sprite.Sprite):
 		self.collided = 0
 
 		self.image = pygame.transform.rotate(pygame.transform.scale_by(pygame.image.load(f'Images/Laser/Laser{self.laser_index}.png'), self.SIZE), self.ANGLE).convert_alpha()
-		self.hit_image = pygame.transform.rotate(pygame.transform.scale_by(pygame.image.load(f'Images/Laser/Hit.png'), self.SIZE), self.ANGLE).convert_alpha()
+		self.hit_image = pygame.transform.rotate(pygame.transform.scale_by(pygame.image.load(f'Images/Explosion/Flash.png'), self.SIZE / 8), self.ANGLE).convert_alpha()
 		self.mask = pygame.mask.from_surface(self.image)
 
 		self.rect = self.image.get_rect(center = start_pos)
@@ -512,7 +512,7 @@ class Laser(pygame.sprite.Sprite):
 
 	def update(self, dt: int | float) -> None:
 
-		if self.collided >= 2: self.kill()
+		if self.collided >= 1: self.kill()
 		self.rect.center = self.pos
 
 		self.move(dt)
@@ -522,10 +522,6 @@ class Laser(pygame.sprite.Sprite):
 
 		if self.pos.y <= 0 - (self.image.get_height() / 2) or self.pos.y >= HEIGHT + (self.image.get_height() / 2): self.kill()
 		if self.pos.x <= 0 - (self.image.get_width() / 2) or self.pos.x >= WIDTH + (self.image.get_width() / 2): self.kill()
-
-		if pygame.sprite.spritecollide(self, self.game.lemonoids, False, pygame.sprite.collide_rect):
-			if pygame.sprite.spritecollide(self, self.game.lemonoids, False, pygame.sprite.collide_mask):
-				self.hit()
 
 	def move(self, dt: int | float) -> None:
 
@@ -548,7 +544,6 @@ class Lemonoid(pygame.sprite.Sprite):
 		# Constant Vars
 		self.game = game
 		self.HEALTHS = {1: 10, 2: 4, 3: 2, 4: 1} # size: health
-		self.SIZES = {1: 1, 2: 0.5, 3: 0.25, 4: 0.125} # size: relative image size
 		self.SCORES = {1: 100, 2: 50, 3: 20, 4: 10} # size: score gained when destroyed
 		self.MOVE_SPEED = move_speed
 		self.ROTATE_SPEED = 100 * size
@@ -564,7 +559,7 @@ class Lemonoid(pygame.sprite.Sprite):
 		self.size = size
 
 		# Images
-		self.og_image = pygame.transform.rotate(pygame.transform.scale_by(pygame.image.load('Images/Lemonoid/Lemonoid.png'), self.SIZES[self.size] * 10), self.angle).convert_alpha()
+		self.og_image = pygame.transform.rotate(pygame.transform.scale_by(pygame.image.load(f'Images/Lemonoid/Lemonoid{self.size}.png'), 5), self.angle).convert_alpha()
 		self.particle_images = [pygame.image.load(f'Images/Lemonoid/Break/Particle{i}.png').convert_alpha() for i in range(2)]
 		self.image = self.og_image
 
@@ -618,6 +613,7 @@ class Lemonoid(pygame.sprite.Sprite):
 			if collided_lasers and not self.colliding: 
 				
 				self.hit(relative_collision_pos = pygame.sprite.collide_mask(self, collided_lasers[0]))
+				for laser in collided_lasers: laser.hit()
 				self.colliding = True
 
 			else: self.colliding = False
