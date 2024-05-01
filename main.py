@@ -17,7 +17,6 @@ h2_font = pygame.font.Font('Fonts/pixel_font.ttf', 50)
 h3_font = pygame.font.Font('Fonts/pixel_font.ttf', 25)
 
 # Window Setup
-pygame.mouse.set_visible(False)
 pygame.display.set_icon(pygame.image.load('Images/Icon.ico'))
 pygame.display.set_caption('Lemonoids | INITIALISING...')
 screen.blit(pygame.transform.scale(pygame.image.load('Images/Cover.png'), (WIDTH, HEIGHT)), (0, 0))
@@ -41,7 +40,7 @@ class Game:
 		self.explosion_frames = [pygame.transform.scale_by(pygame.transform.rotate(pygame.image.load(f'Images/Explosion/God-Rays.png'), step), 0.5).convert_alpha() for step in range(0, int(360 / 20), 2)]
 
 		self.player = pygame.sprite.GroupSingle(Player(game = self))
-		self.cursor = pygame.sprite.GroupSingle(Cursor(game = self))
+		self.cursor = Cursor(game = self)
 		self.lemonoids = pygame.sprite.Group()
 		for i in range(3): self.lemonoids.add(Lemonoid(angle = randint(0, 360), move_speed = 75, size = 1, game = self))
 		self.explosions = pygame.sprite.Group()
@@ -206,6 +205,46 @@ class Text:
 				[self.fps_text2, self.fps_text2_rect]
 			]
 
+class Cursor:
+
+	def __init__(self, game: Game) -> None:
+
+		self.game = game
+		self.ROTATE_SPEED = 500
+		self.angle = 0
+		self.index = {self.game.S_PLAY: 1, self.game.S_GAME_OVER: 0}[self.game.get_state()]
+
+		self.cursor_unfocus_image = pygame.transform.scale_by(pygame.image.load(f'Images/Cursor/Cursor/Unfocus.png'), 3).convert_alpha()
+		self.cursor_focus_image = pygame.transform.scale_by(pygame.image.load(f'Images/Cursor/Cursor/Focus.png'), 3).convert_alpha()
+		self.focussed = False
+		
+		self.crosshair_unfocus_image = pygame.transform.scale_by(pygame.image.load(f'Images/Cursor/Crosshair/Unfocus.png'), 3).convert_alpha()
+		self.crosshair_focus_image = pygame.transform.scale_by(pygame.image.load(f'Images/Cursor/Crosshair/Focus.png'), 3).convert_alpha()
+		self.focussed = False
+
+		self.images = [[self.cursor_unfocus_image, self.cursor_focus_image], [self.crosshair_unfocus_image, self.crosshair_focus_image]]
+		self.image = self.images[self.index][self.focussed]
+		self.cursor = pygame.cursors.Cursor((self.image.get_width() / 2, self.image.get_height() / 2), self.image)
+
+	def update(self, dt: float | int) -> None:
+
+		self.cursor = pygame.cursors.Cursor((self.image.get_width() // 2, self.image.get_height() // 2), self.image)
+		pygame.mouse.set_cursor(self.cursor)
+
+		self.index = {self.game.S_PLAY: 1, self.game.S_GAME_OVER: 0}[self.game.get_state()]
+		self.image = self.images[self.index][self.focussed]
+		self.input(dt)
+
+	def input(self, dt: float | int) -> None:
+
+		self.focussed = pygame.mouse.get_pressed()[0]
+		if self.focussed and self.game.get_state() == self.game.S_PLAY: self.rotate(dt)
+
+	def rotate(self, dt: float | int) -> None:
+
+		self.angle = (self.angle % 360) + self.ROTATE_SPEED * dt
+		self.image = pygame.transform.rotate(self.images[self.index][self.focussed], self.angle).convert_alpha()
+
 class Player(pygame.sprite.Sprite):
 
 	def __init__(self, game: Game) -> None:
@@ -215,7 +254,7 @@ class Player(pygame.sprite.Sprite):
 		self.game = game
 
 		# Constant Vars
-		self.SIZE = 2
+		self.SIZE = 2.5
 		self.ACCELERATION_VEL = 0.999
 		self.SPEED = 3
 		self.FIRE_RATE = 0
@@ -444,52 +483,6 @@ class Player(pygame.sprite.Sprite):
 		self.blink_index = 0
 		self.lasers_fired.empty()
 
-class Cursor(pygame.sprite.Sprite):
-
-	def __init__(self, game: Game) -> None:
-
-		super().__init__()
-
-		self.game = game
-		self.ROTATE_SPEED = 500
-		self.angle = 0
-		self.index = {self.game.S_PLAY: 1, self.game.S_GAME_OVER: 0}[self.game.get_state()]
-
-		self.cursor_unfocus_image = pygame.transform.scale_by(pygame.image.load(f'Images/Cursor/Cursor/Unfocus.png'), 3).convert_alpha()
-		self.cursor_focus_image = pygame.transform.scale_by(pygame.image.load(f'Images/Cursor/Cursor/Focus.png'), 3).convert_alpha()
-		self.focussed = False
-		
-		self.crosshair_unfocus_image = pygame.transform.scale_by(pygame.image.load(f'Images/Cursor/Crosshair/Unfocus.png'), 3).convert_alpha()
-		self.crosshair_focus_image = pygame.transform.scale_by(pygame.image.load(f'Images/Cursor/Crosshair/Focus.png'), 3).convert_alpha()
-		self.focussed = False
-
-		self.images = [[self.cursor_unfocus_image, self.cursor_focus_image], [self.crosshair_unfocus_image, self.crosshair_focus_image]]
-		self.image = self.images[self.index][self.focussed]
-
-		self.rect = self.image.get_rect(center = pygame.mouse.get_pos())
-		self.pos = pygame.math.Vector2(self.rect.center)
-
-	def update(self, dt: float | int) -> None:
-
-		self.rect.center = self.pos
-		self.index = {self.game.S_PLAY: 1, self.game.S_GAME_OVER: 0}[self.game.get_state()]
-		self.image = self.images[self.index][self.focussed]
-		self.input()
-
-		if self.focussed and self.game.get_state() == self.game.S_PLAY: self.rotate(dt)
-
-		self.rect = self.image.get_rect(center = self.pos)
-
-	def input(self) -> None:
-
-		self.pos = pygame.mouse.get_pos()
-		self.focussed = pygame.mouse.get_pressed()[0]
-
-	def rotate(self, dt: float | int) -> None:
-
-		self.angle = (self.angle % 360) + self.ROTATE_SPEED * dt
-		self.image = pygame.transform.rotate(self.images[self.index][self.focussed], self.angle).convert_alpha()
-
 class Laser(pygame.sprite.Sprite):
 
 	def __init__(self, start_pos: tuple, angle: int | float, size: int | float, laser_index: int, game: Game) -> None:
@@ -559,7 +552,7 @@ class Lemonoid(pygame.sprite.Sprite):
 		self.size = size
 
 		# Images
-		self.og_image = pygame.transform.rotate(pygame.transform.scale_by(pygame.image.load(f'Images/Lemonoid/Lemonoid{self.size}.png'), 5), self.angle).convert_alpha()
+		self.og_image = pygame.transform.rotate(pygame.transform.scale_by(pygame.image.load(f'Images/Lemonoid/Lemonoid{self.size}.png'), 2.5), self.angle).convert_alpha()
 		self.particle_images = [pygame.image.load(f'Images/Lemonoid/Break/Particle{i}.png').convert_alpha() for i in range(2)]
 		self.image = self.og_image
 
@@ -941,7 +934,7 @@ class Particle(pygame.sprite.Sprite):
 		self.image.set_alpha(self.alpha)
 		if self.alpha <= 0: self.kill()
 
-def main():
+def main() -> None:
 
 	game = Game()
 	text = game.text
@@ -1031,7 +1024,6 @@ def main():
 
 		# Cursor
 		cursor.update(dt)
-		cursor.draw(screen)
 
 		pygame.display.update()
 		clock.tick(FPS)
