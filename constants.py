@@ -1,5 +1,5 @@
 # Screen Dimensions
-WIDTH, HEIGHT = 1000, 750
+WIDTH, HEIGHT = 500, 750
 CENTER_X, CENTER_Y = WIDTH / 2, HEIGHT / 2
 
 # FPS
@@ -16,5 +16,5 @@ YELLOW = '#ffea00'
 RED = '#ff2600'
 
 # Audio
-SFX = False
+SFX = True
 MUSIC = False

@@ -19,7 +19,11 @@ h3_font = pygame.font.Font('Fonts/pixel_font.ttf', 25)
 # Window Setup
 pygame.display.set_icon(pygame.image.load('Images/Icon.ico'))
 pygame.display.set_caption('Lemonoids | INITIALISING...')
-screen.blit(pygame.transform.scale(pygame.image.load('Images/Cover.png'), (WIDTH, HEIGHT)), (0, 0))
+screen.fill(BG_COLOUR)
+cover = pygame.image.load('Images/Cover/Cover.png').convert_alpha()
+if cover.get_width() > WIDTH: cover = pygame.transform.scale(cover, (WIDTH, cover.get_height() / WIDTH))
+cover_rect = cover.get_rect(center = (CENTER_X / 2, CENTER_Y / 2))
+screen.blit(cover, cover_rect)
 pygame.display.update()
 
 class Game:
@@ -1020,7 +1024,7 @@ def main() -> None:
 
 		# Text
 		text.update()
-		[screen.blit(line[0], line[1]) for line in text.texts]
+		for line in text.texts: screen.blit(line[0], line[1])
 
 		# Cursor
 		cursor.update(dt)
