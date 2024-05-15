@@ -20,10 +20,11 @@ h3_font = pygame.font.Font('Fonts/pixel_font.ttf', 25)
 pygame.display.set_icon(pygame.image.load('Images/Icon.ico'))
 pygame.display.set_caption('Lemonoids | INITIALISING...')
 screen.fill(BG_COLOUR)
+# Cover
 cover = pygame.image.load('Images/Cover/Cover.png').convert_alpha()
-if cover.get_width() > WIDTH: cover = pygame.transform.scale(cover, (WIDTH, cover.get_height() / WIDTH))
-cover_rect = cover.get_rect(center = (CENTER_X / 2, CENTER_Y / 2))
-screen.blit(cover, cover_rect)
+if cover.get_width() > WIDTH: cover = pygame.transform.scale(cover, (WIDTH, (WIDTH / cover.get_width()) * cover.get_height()))
+if cover.get_height() > HEIGHT: cover = pygame.transform.scale(cover, ((HEIGHT / cover.get_height()) * cover.get_width(), HEIGHT))
+screen.blit(cover, cover.get_rect(center = (CENTER_X, CENTER_Y)))
 pygame.display.update()
 
 class Game:
@@ -280,7 +281,7 @@ class Player(pygame.sprite.Sprite):
 		self.dead = False
 		self.death_time = 0
 		self.blink_index = 0
-		self.invincible = True
+		self.invincible = False
 
 		# Images
 		self.og_image = pygame.transform.scale_by(pygame.image.load(f'Images/Player/Ship{self.ship_index}/Normal.png'), self.SIZE).convert_alpha()
@@ -299,6 +300,7 @@ class Player(pygame.sprite.Sprite):
 
 		# SFX
 		self.shoot_sfx = pygame.mixer.Sound('Audio/SFX/Player/Shoot.wav')
+		self.death_sfx = pygame.mixer.Sound('Audio/SFX/Player/Death.wav')
 
 		# Lasers Fired
 		self.lasers_fired = pygame.sprite.Group()
@@ -407,6 +409,7 @@ class Player(pygame.sprite.Sprite):
 			for i in range(self.EXPLOSION_SHAKE_VEL): self.game.shake_offsets.append((1, 1))
 
 		self.game.shake_offsets.append((0, 0))
+		self.death_sfx.play()
 		
 		self.death_time = pygame.time.get_ticks()
 
@@ -570,6 +573,7 @@ class Lemonoid(pygame.sprite.Sprite):
 		self.hit_sfx = pygame.mixer.Sound('Audio/SFX/Lemonoid/Hit.wav')
 		self.explosion_sfx = pygame.mixer.Sound('Audio/SFX/Lemonoid/Explosion.wav')
 		self.explosion_sfx_2 = pygame.mixer.Sound('Audio/SFX/Lemonoid/Explosion2.wav')
+		for sfx in [self.hit_sfx, self.explosion_sfx, self.explosion_sfx_2]: sfx.set_volume(0.3)
 
 		# Health Bar
 		if self.size != 4: 
@@ -981,6 +985,7 @@ def main() -> None:
 				if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
 
 					game.reset()
+					game.respawn()
 					game.set_state(game.S_PLAY)
 
 		screen.fill(BG_COLOUR)
