@@ -34,7 +34,8 @@ class Game:
 			self, 
 			audio: dict[
 				'music': bool, 
-				'sfx': bool
+				'sfx': bool,
+				'music_vol': int
 			],
 			colours: dict[
 				'black': str, 
@@ -58,6 +59,7 @@ class Game:
 		self.S_PLAY = 'play'
 		self.S_GAME_OVER = 'game_over'
 		self.MUSIC = audio['music']
+		self.MUSIC_VOL = audio['music_vol']
 		self.SFX = audio['sfx']
 		self.COLOURS = colours
 		self.FONTS = fonts
@@ -77,6 +79,11 @@ class Game:
 		self.explosions = pygame.sprite.Group()
 		self.text = Text(game = self)
 		self.particles = pygame.sprite.Group()
+
+		# Music
+		self.game_music = pygame.mixer.Sound('Audio/Music/game_music.wav')
+		self.game_music.set_volume(self.MUSIC_VOL / 100)
+		if self.MUSIC: self.game_music.play(-1)
 
 		self.lemonoid_frequency = 15000
 		self.LEMONOID_TIMER = pygame.USEREVENT + 0
@@ -335,6 +342,9 @@ class Player(pygame.sprite.Sprite):
 		# SFX
 		self.shoot_sfx = pygame.mixer.Sound('Audio/SFX/Player/Shoot.wav')
 		self.death_sfx = pygame.mixer.Sound('Audio/SFX/Player/Death.wav')
+		self.hit_sfx = pygame.mixer.Sound('Audio/SFX/Player/Hit.mp3')
+		self.thrust_sfx = pygame.mixer.Sound('Audio/SFX/Player/Thrust.wav')
+		self.thrust_sfx.set_volume(0.1)
 
 		self.lasers_fired = pygame.sprite.Group()
 		self.health_bar = pygame.sprite.GroupSingle(Health_Bar(offset = (0, -40), size = 0.75, parent = self))
@@ -362,43 +372,47 @@ class Player(pygame.sprite.Sprite):
 		mouse_pos = pygame.mouse.get_pos()
 
 		# Movement
-		self.move(self.angle, keys_pressed[pygame.K_w], dt)
+		if not self.dead: self.move(self.angle, keys_pressed[pygame.K_w], dt)
 
 		# Direction
 		if self.fire_buffer != 0: self.rotate_to(mouse_pos, self.og_image)
 		if self.fire_buffer == 0: self.rotate_to(mouse_pos, self.shoot_image)
-		if keys_pressed[pygame.K_w] and randint(0, 1) == 0: self.rotate_to(mouse_pos, self.thruster_image)
+		if keys_pressed[pygame.K_w]: 
+			
+			if randint(0, 1) == 0: self.rotate_to(mouse_pos, self.thruster_image)
+			self.game.play_sfx(self.thrust_sfx)
+
 		if self.blink_index == 1: self.rotate_to(mouse_pos, self.blink_image)
 
-		if mouse_pressed or keys_pressed[pygame.K_SPACE]: self.shoot(dt)
-		elif not mouse_pressed and not keys_pressed[pygame.K_SPACE]: self.set_fire_rate()
+		if (mouse_pressed or keys_pressed[pygame.K_SPACE]) and not self.dead: self.shoot(dt)
+		elif not mouse_pressed and not keys_pressed[pygame.K_SPACE] and not self.dead: self.set_fire_rate()
 
 		# Collisions
-		if pygame.sprite.spritecollide(self, self.game.lemonoids, False, pygame.sprite.collide_rect) and not self.collided and not self.dead and not self.invincible:
+		if pygame.sprite.spritecollide(self, self.game.lemonoids, False, pygame.sprite.collide_rect) and not self.dead and not self.invincible:
 
 			collided_lemonoids = pygame.sprite.spritecollide(self, self.game.lemonoids, False, pygame.sprite.collide_mask)
 
 			if collided_lemonoids:
 
-				self.hit(collided_lemonoids[0].size)
+				self.hit(5 - collided_lemonoids[0].size)
+				collided_lemonoids[0].death(True)
 				self.collided = True
 
 			else: self.collided = False
 
-	def hit(self, lemonoid_size: int) -> None:
+	def hit(self, damage: int) -> None:
 
-		print(lemonoid_size)
-		print(5 - lemonoid_size)
-		self.health -= 5 - lemonoid_size
-		# ISSSUE: FUNC ONLY RUNNNING ONCE
+		self.health -= damage
 
 		if self.health <= 0:
 
+			self.dead = True
 			self.lives -= 1
 			self.health_bar.sprite.segment.empty()
 			self.health_bar.empty()
 			self.death_animation()
-			self.dead = True
+
+		else: self.game.play_sfx(self.hit_sfx)
 
 	def death_animation(self) -> None:
 
@@ -542,6 +556,8 @@ class Player(pygame.sprite.Sprite):
 		self.dead = False
 		self.death_time = 0
 		self.blink_index = 0
+		self.health = self.MAX_HEALTH
+		self.health_bar = pygame.sprite.GroupSingle(Health_Bar(offset = (0, -40), size = 0.75, parent = self))
 		self.lasers_fired.empty()
 
 class Laser(pygame.sprite.Sprite):
@@ -555,6 +571,7 @@ class Laser(pygame.sprite.Sprite):
 		self.ANGLE = angle
 		self.SIZE = size
 		self.SPEEDS = {0: 1000} # laser index: speed
+		self.DAMAGES = {0: 1} # laser index: damage to lemonoid
 		self.collided = 0
 
 		self.image = pygame.transform.rotate(pygame.transform.scale_by(pygame.image.load(f'Images/Laser/Laser{self.laser_index}.png'), self.SIZE), self.ANGLE).convert_alpha()
@@ -602,7 +619,6 @@ class Lemonoid(pygame.sprite.Sprite):
 		self.MOVE_SPEED = move_speed
 		self.ROTATE_SPEED = 100 * size
 		self.DIRECTION = angle
-		self.DAMAGE = 1
 		self.MAX_HEALTH = self.HEALTHS[size]
 		self.EXPLOSION_SHAKE_VEL = 8
 		
@@ -661,15 +677,14 @@ class Lemonoid(pygame.sprite.Sprite):
 
 	def input(self) -> None:
 
-		if pygame.sprite.spritecollide(self, self.game.player.sprite.lasers_fired, False, pygame.sprite.collide_rect) or pygame.sprite.spritecollide(self, self.game.player, False, pygame.sprite.collide_rect):
+		if pygame.sprite.spritecollide(self, self.game.player.sprite.lasers_fired, False, pygame.sprite.collide_rect):
 
 			collided_lasers = pygame.sprite.spritecollide(self, self.game.player.sprite.lasers_fired, False, pygame.sprite.collide_mask)
 
-			if (collided_lasers or pygame.sprite.spritecollide(self, self.game.player, False, pygame.sprite.collide_mask)) and not self.colliding: 
+			if collided_lasers and not self.colliding: 
 				
-				self.hit(relative_collision_pos = pygame.sprite.collide_mask(self, collided_lasers[0] if collided_lasers else self.game.player.sprite))
-				if collided_lasers: 
-					for laser in collided_lasers: laser.hit()
+				self.hit(relative_collision_pos = pygame.sprite.collide_mask(self, collided_lasers[0] if collided_lasers else self.game.player.sprite), damage = collided_lasers[0].DAMAGES[collided_lasers[0].laser_index])
+				for laser in collided_lasers: laser.hit()
 				self.colliding = True
 
 			else: self.colliding = False
@@ -741,9 +756,9 @@ class Lemonoid(pygame.sprite.Sprite):
 
 			)	
 
-	def hit(self, relative_collision_pos: tuple | pygame.math.Vector2) -> None:
+	def hit(self, relative_collision_pos: tuple | pygame.math.Vector2, damage: int) -> None:
 
-		self.health -= self.DAMAGE
+		self.health -= damage
 
 		# SFX
 		self.game.play_sfx(self.hit_sfx)
@@ -780,9 +795,9 @@ class Lemonoid(pygame.sprite.Sprite):
 
 				)
 		
-		else: self.death()
+		else: self.death(False)
 
-	def death(self) -> None:
+	def death(self, collide_player: bool) -> None:
 
 		if self.size != 4:
 
@@ -809,7 +824,7 @@ class Lemonoid(pygame.sprite.Sprite):
 		if self.size == 1: self.game.play_sfx(self.explosion_sfx)
 		else: self.game.play_sfx(self.explosion_sfx_2)
 
-		self.game.add_score(self.SCORES[self.size])
+		if not collide_player: self.game.add_score(self.SCORES[self.size])
 		self.death_animation(self.size)
 		self.kill()
 
@@ -1000,7 +1015,8 @@ def main() -> None:
 	game = Game(
 		audio = {
 			'music': MUSIC, 
-			'sfx': SFX
+			'sfx': SFX,
+			'music_vol': MUSIC_VOLUME
 		},
 		colours = {
 			'black': BLACK, 

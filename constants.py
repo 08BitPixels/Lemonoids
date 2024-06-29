@@ -18,3 +18,4 @@ RED = '#ff2600'
 # Audio
 SFX = True
 MUSIC = False
+MUSIC_VOLUME = 25 # percentage
