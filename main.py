@@ -343,8 +343,6 @@ class Player(pygame.sprite.Sprite):
 		self.shoot_sfx = pygame.mixer.Sound('Audio/SFX/Player/Shoot.wav')
 		self.death_sfx = pygame.mixer.Sound('Audio/SFX/Player/Death.wav')
 		self.hit_sfx = pygame.mixer.Sound('Audio/SFX/Player/Hit.mp3')
-		self.thrust_sfx = pygame.mixer.Sound('Audio/SFX/Player/Thrust.wav')
-		self.thrust_sfx.set_volume(0.1)
 
 		self.lasers_fired = pygame.sprite.Group()
 		self.health_bar = pygame.sprite.GroupSingle(Health_Bar(offset = (0, -40), size = 0.75, parent = self))
@@ -377,11 +375,7 @@ class Player(pygame.sprite.Sprite):
 		# Direction
 		if self.fire_buffer != 0: self.rotate_to(mouse_pos, self.og_image)
 		if self.fire_buffer == 0: self.rotate_to(mouse_pos, self.shoot_image)
-		if keys_pressed[pygame.K_w]: 
-			
-			if randint(0, 1) == 0: self.rotate_to(mouse_pos, self.thruster_image)
-			self.game.play_sfx(self.thrust_sfx)
-
+		if keys_pressed[pygame.K_w] and randint(0, 1) == 0: self.rotate_to(mouse_pos, self.thruster_image)
 		if self.blink_index == 1: self.rotate_to(mouse_pos, self.blink_image)
 
 		if (mouse_pressed or keys_pressed[pygame.K_SPACE]) and not self.dead: self.shoot(dt)
