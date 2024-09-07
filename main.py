@@ -1,5 +1,6 @@
 import pygame
 import fittnail
+import os
 
 from time import time
 from math import atan2, cos, sin, degrees, radians, pi
@@ -33,9 +34,8 @@ class Game:
 			
 			self, 
 			audio: dict[
-				'music': bool, 
-				'sfx': bool,
-				'music_vol': int
+				'sfx_vol': int | float,
+				'music_vol': int | float
 			],
 			colours: dict[
 				'black': str, 
@@ -50,6 +50,9 @@ class Game:
 				'h1': pygame.font.Font, 
 				'h2': pygame.font.Font, 
 				'h3': pygame.font.Font,
+			],
+			explosions: dict[
+				'frame_count': int
 			]
 		
 		) -> None:
@@ -58,19 +61,37 @@ class Game:
 
 		self.S_PLAY = 'play'
 		self.S_GAME_OVER = 'game_over'
-		self.MUSIC = audio['music']
 		self.MUSIC_VOL = audio['music_vol']
-		self.SFX = audio['sfx']
+		self.SFX_VOL = audio['sfx_vol']
 		self.COLOURS = colours
 		self.FONTS = fonts
+		self.EXPLOSION_FRAME_COUNT = explosions['frame_count']
 
 		self.state = self.S_PLAY
 		self.score = 0
 		with open('Saves/save.txt', 'r') as save: self.highscore = int(save.readlines()[0].strip('HIGHSCORE = '))
 		self.shake_offset = (0, 0)
 		self.shake_offsets = []
+		self.explosion_frames = []
 
-		self.explosion_frames = [pygame.transform.scale_by(pygame.transform.rotate(pygame.image.load(f'Images/Explosion/God-Rays.png'), step), 0.5).convert_alpha() for step in range(0, int(360 / 20), 2)]
+		if os.path.isdir('Images/Explosion/Frames'):
+
+			frame_count = len([entry for entry in os.listdir('Images/Explosion/Frames') if os.path.isfile(os.path.join('Images/Explosion/Frames', entry))])
+
+			if frame_count != self.EXPLOSION_FRAME_COUNT:
+
+				for path in os.listdir('Images/Explosion/Frames'): os.remove(f'Images/Explosion/Frames/{path}')
+				os.rmdir('Images/Explosion/Frames')
+				self.create_explosion_frames(self.EXPLOSION_FRAME_COUNT)
+
+			else:
+				
+				for i in range(frame_count):
+
+					self.explosion_frames.append(pygame.image.load(f'Images/Explosion/Frames/{i}.png'))
+					pygame.display.set_caption(f'Lemonoids | INITIALISING... ({round(i / frame_count * 100, 1)}%)')
+
+		else: self.create_explosion_frames(self.EXPLOSION_FRAME_COUNT)
 
 		self.player = pygame.sprite.GroupSingle(Player(game = self))
 		self.cursor = Cursor(game = self)
@@ -82,8 +103,8 @@ class Game:
 
 		# Music
 		self.game_music = pygame.mixer.Sound('Audio/Music/game_music.wav')
-		self.game_music.set_volume(self.MUSIC_VOL / 100)
-		if self.MUSIC: self.game_music.play(-1)
+		self.game_music.set_volume(self.MUSIC_VOL)
+		if self.MUSIC_VOL > 0: self.game_music.play(-1)
 
 		self.lemonoid_frequency = 15000
 		self.LEMONOID_TIMER = pygame.USEREVENT + 0
@@ -123,7 +144,24 @@ class Game:
 		self.shake_offset = (self.shake_offset[0] * offset[0], self.shake_offset[1] * offset[1])
 
 	def play_sfx(self, sfx: pygame.mixer.Sound) -> None:
-		if self.SFX: sfx.play()
+		if self.SFX_VOL > 0: sfx.play()
+
+	def load_sfx(self, path: str) -> pygame.mixer.Sound:
+		
+		sfx = pygame.mixer.Sound(path)
+		sfx.set_volume(self.SFX_VOL)
+		return sfx
+
+	def create_explosion_frames(self, frame_count: int) -> None:
+
+		os.makedirs('Images/Explosion/Frames')
+		for i in range(frame_count):
+
+			image = pygame.transform.scale_by(pygame.transform.rotate(pygame.image.load(f'Images/Explosion/God-Rays.png'), i), 0.5).convert_alpha()
+			self.explosion_frames.append(image)
+			pygame.image.save(image, f'Images/Explosion/Frames/{i}.png')
+			pygame.display.set_caption(f'Lemonoids | INITIALISING... ({round(i / frame_count * 100, 1)}%)')
+			pygame.display.update()
 
 	def game_over(self) -> None:
 
@@ -321,7 +359,7 @@ class Player(pygame.sprite.Sprite):
 		self.dead = False
 		self.death_time = 0
 		self.blink_index = 0
-		self.invincible = False
+		self.invincible = True
 		self.health = self.MAX_HEALTH
 
 		# Images
@@ -340,9 +378,9 @@ class Player(pygame.sprite.Sprite):
 		self.pos = pygame.math.Vector2(self.rect.center)
 
 		# SFX
-		self.shoot_sfx = pygame.mixer.Sound('Audio/SFX/Player/Shoot.wav')
-		self.death_sfx = pygame.mixer.Sound('Audio/SFX/Player/Death.wav')
-		self.hit_sfx = pygame.mixer.Sound('Audio/SFX/Player/Hit.mp3')
+		self.shoot_sfx = self.game.load_sfx('Audio/SFX/Player/Shoot.wav')
+		self.death_sfx = self.game.load_sfx('Audio/SFX/Player/Death.wav')
+		self.hit_sfx = self.game.load_sfx('Audio/SFX/Player/Hit.mp3')
 
 		self.lasers_fired = pygame.sprite.Group()
 		self.health_bar = pygame.sprite.GroupSingle(Health_Bar(offset = (0, -40), size = 0.75, parent = self))
@@ -378,7 +416,7 @@ class Player(pygame.sprite.Sprite):
 		if keys_pressed[pygame.K_w] and randint(0, 1) == 0: self.rotate_to(mouse_pos, self.thruster_image)
 		if self.blink_index == 1: self.rotate_to(mouse_pos, self.blink_image)
 
-		if (mouse_pressed or keys_pressed[pygame.K_SPACE]) and not self.dead: self.shoot(dt)
+		if (mouse_pressed or keys_pressed[pygame.K_SPACE]) and not self.dead:self.shoot(dt)	
 		elif not mouse_pressed and not keys_pressed[pygame.K_SPACE] and not self.dead: self.set_fire_rate()
 
 		# Collisions
@@ -634,10 +672,10 @@ class Lemonoid(pygame.sprite.Sprite):
 		self.pos = pygame.math.Vector2(self.rect.center)
 
 		# SFX
-		self.hit_sfx = pygame.mixer.Sound('Audio/SFX/Lemonoid/Hit.wav')
-		self.explosion_sfx = pygame.mixer.Sound('Audio/SFX/Lemonoid/Explosion.wav')
-		self.explosion_sfx_2 = pygame.mixer.Sound('Audio/SFX/Lemonoid/Explosion2.wav')
-		for sfx in [self.hit_sfx, self.explosion_sfx, self.explosion_sfx_2]: sfx.set_volume(0.3)
+		self.hit_sfx = self.game.load_sfx('Audio/SFX/Lemonoid/Hit.wav')
+		self.explosion_sfx = self.game.load_sfx('Audio/SFX/Lemonoid/Explosion.wav')
+		self.explosion_sfx_2 = self.game.load_sfx('Audio/SFX/Lemonoid/Explosion2.wav')
+		for sfx in [self.hit_sfx, self.explosion_sfx, self.explosion_sfx_2]: sfx.set_volume(sfx.get_volume() * 0.3)
 
 		# Health Bar
 		if self.size != 4: 
@@ -852,6 +890,8 @@ class Explosion(pygame.sprite.Sprite):
 		
 		if self.TYPE == 0: self.rotate(dt)
 		self.fade(dt)
+		self.pos.x += self.game.shake_offset[0]
+		self.pos.y -= self.game.shake_offset[1]
 
 	def rotate(self, dt: float | int) -> None:
 
@@ -1008,9 +1048,8 @@ def main() -> None:
 
 	game = Game(
 		audio = {
-			'music': MUSIC, 
-			'sfx': SFX,
-			'music_vol': MUSIC_VOLUME
+			'sfx_vol': SFX_VOL,
+			'music_vol': MUSIC_VOL
 		},
 		colours = {
 			'black': BLACK, 
@@ -1025,6 +1064,9 @@ def main() -> None:
 			'h1': h1_font,
 			'h2': h2_font,
 			'h3': h3_font
+		},
+		explosions = {
+			'frame_count': EXPLOSION_FRAME_COUNT
 		}
 	)
 	text = game.text
