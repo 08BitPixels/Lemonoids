@@ -8,6 +8,15 @@ from random import randint, uniform, choice
 
 from constants import *
 
+# TO DO
+# -------------------
+# - Health Bar not synced with main body
+# - Lemonoid self collisions (not destrtoy if collisding on spawn)
+# - Ship 2 + 3
+# - Game Over Screen
+# 	- Previous Scores
+# - Menu Screen
+
 # PYGAME SETUP
 pygame.init()
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -19,11 +28,11 @@ h2_font = pygame.font.Font('Fonts/pixel_font.ttf', 50)
 h3_font = pygame.font.Font('Fonts/pixel_font.ttf', 25)
 
 # Window Setup
-pygame.display.set_icon(pygame.image.load('Images/Icon.ico'))
+pygame.display.set_icon(pygame.image.load('Images/UI/Icon.ico'))
 pygame.display.set_caption('Lemonoids | INITIALISING...')
 screen.fill(BG_COLOUR)
 # Cover
-cover = pygame.image.load('Images/Cover/Cover.png').convert_alpha()
+cover = pygame.image.load('Images/UI/Cover/Cover.png').convert_alpha()
 cover = pygame.transform.scale(cover, fittnail.execute(img_size = cover.get_size(), screen_size = screen.get_size())).convert_alpha()
 screen.blit(cover, cover.get_rect(center = (CENTER_X, CENTER_Y)))
 pygame.display.update()
@@ -59,39 +68,19 @@ class Game:
 		
 		start_time = time()
 
-		self.S_PLAY = 'play'
-		self.S_GAME_OVER = 'game_over'
+		self.STATES = {'play': 0, 'game_over': 1}
 		self.MUSIC_VOL = audio['music_vol']
 		self.SFX_VOL = audio['sfx_vol']
 		self.COLOURS = colours
 		self.FONTS = fonts
 		self.EXPLOSION_FRAME_COUNT = explosions['frame_count']
 
-		self.state = self.S_PLAY
+		self.state = self.STATES['play']
 		self.score = 0
 		with open('Saves/save.txt', 'r') as save: self.highscore = int(save.readlines()[0].strip('HIGHSCORE = '))
 		self.shake_offset = (0, 0)
 		self.shake_offsets = []
-		self.explosion_frames = []
-
-		if os.path.isdir('Images/Explosion/Frames'):
-
-			frame_count = len([entry for entry in os.listdir('Images/Explosion/Frames') if os.path.isfile(os.path.join('Images/Explosion/Frames', entry))])
-
-			if frame_count != self.EXPLOSION_FRAME_COUNT:
-
-				for path in os.listdir('Images/Explosion/Frames'): os.remove(f'Images/Explosion/Frames/{path}')
-				os.rmdir('Images/Explosion/Frames')
-				self.create_explosion_frames(self.EXPLOSION_FRAME_COUNT)
-
-			else:
-				
-				for i in range(frame_count):
-
-					self.explosion_frames.append(pygame.image.load(f'Images/Explosion/Frames/{i}.png'))
-					pygame.display.set_caption(f'Lemonoids | INITIALISING... ({round(i / frame_count * 100, 1)}%)')
-
-		else: self.create_explosion_frames(self.EXPLOSION_FRAME_COUNT)
+		self.explosion_frames = self.load_explosion_frames()
 
 		self.player = pygame.sprite.GroupSingle(Player(game = self))
 		self.cursor = Cursor(game = self)
@@ -100,6 +89,8 @@ class Game:
 		self.explosions = pygame.sprite.Group()
 		self.text = Text(game = self)
 		self.particles = pygame.sprite.Group()
+		self.life_count_meter = pygame.sprite.Group()
+		for i in range(self.player.sprite.MAX_LIVES): self.life_count_meter.add(Life_Count_Meter(index = i, ship = {'index': self.player.sprite.ship_index, 'max_lives': self.player.sprite.MAX_LIVES}, origin = (CENTER_X, HEIGHT - 79)))
 
 		# Music
 		self.game_music = pygame.mixer.Sound('Audio/Music/game_music.wav')
@@ -110,7 +101,7 @@ class Game:
 		self.LEMONOID_TIMER = pygame.USEREVENT + 0
 		pygame.time.set_timer(self.LEMONOID_TIMER, self.lemonoid_frequency)
 
-		print(f'Game Initialised in {round(time() - start_time, 3)}s')
+		print(f'Game Initialised {round(time() - start_time, 1)}s')
 
 	def update(self) -> None:
 
@@ -152,22 +143,45 @@ class Game:
 		sfx.set_volume(self.SFX_VOL)
 		return sfx
 
-	def create_explosion_frames(self, frame_count: int) -> None:
+	def create_explosion_frames(self, frame_count: int) -> list:
+
+		frames = []
 
 		os.makedirs('Images/Explosion/Frames')
 		for i in range(frame_count):
 
 			image = pygame.transform.scale_by(pygame.transform.rotate(pygame.image.load(f'Images/Explosion/God-Rays.png'), i), 0.5).convert_alpha()
-			self.explosion_frames.append(image)
+			frames.append(image)
 			pygame.image.save(image, f'Images/Explosion/Frames/{i}.png')
-			pygame.display.set_caption(f'Lemonoids | INITIALISING... ({round(i / frame_count * 100, 1)}%)')
+			pygame.display.set_caption(f'Lemonoids | INITIALISING... Creating New Explosion Frames... {round(i / frame_count * 100, 1)}%')
 			pygame.display.update()
 
-	def game_over(self) -> None:
+		return frames
 
-		self.score = 0
-		self.state = self.S_GAME_OVER
-		self.reset()
+	def load_explosion_frames(self) -> list:
+
+		frames = []
+
+		if os.path.isdir('Images/Explosion/Frames'):
+
+			frame_count = len([entry for entry in os.listdir('Images/Explosion/Frames') if os.path.isfile(os.path.join('Images/Explosion/Frames', entry))])
+
+			if frame_count != self.EXPLOSION_FRAME_COUNT:
+
+				for path in os.listdir('Images/Explosion/Frames'): os.remove(f'Images/Explosion/Frames/{path}')
+				os.rmdir('Images/Explosion/Frames')
+				frames = self.create_explosion_frames(self.EXPLOSION_FRAME_COUNT)
+
+			else:
+				
+				for i in range(frame_count):
+
+					frames.append(pygame.image.load(f'Images/Explosion/Frames/{i}.png'))
+					pygame.display.set_caption(f'Lemonoids | INITIALISING... {round(i / frame_count * 100, 1)}%')
+
+		else: frames = self.create_explosion_frames(self.EXPLOSION_FRAME_COUNT)
+
+		return frames
 
 	def respawn(self) -> None:
 
@@ -184,15 +198,33 @@ class Game:
 		self.explosions.empty()
 		self.player.sprite.reset()
 		self.particles.empty()
+		self.life_count_meter.empty()
+
+	def game_over(self) -> None:
+
+		self.score = 0
+		self.state = self.STATES['game_over']
+		self.reset()
+
+	def set_game(self) -> None:
+
+		self.reset()
+		self.respawn()
+
+		for i in range(self.player.sprite.MAX_LIVES): 
+			self.life_count_meter.add(
+				Life_Count_Meter(
+					index = i, 
+					ship = {'index': self.player.sprite.ship_index, 'max_lives': self.player.sprite.MAX_LIVES}, 
+					origin = (CENTER_X, HEIGHT - 79)
+				)
+			)
 
 	def save(self) -> None:
 
-		print('Saving...')
-		with open('Saves/save.txt', 'w') as save:
-
-			save.write(f'HIGHSCORE = {self.highscore}')
-
-		print('Saving Completed Successfully')
+		print('Saving... 0%')
+		with open('Saves/save.txt', 'w') as save: save.write(f'HIGHSCORE = {self.highscore}')
+		print('Saving... 100%')
 
 class Text:
 
@@ -227,8 +259,11 @@ class Text:
 		self.lives_text = None
 		self.lives_text_rect = None
 
-		self.play_text3 = self.FONTS['h3'].render('Lives', False, self.COLOURS['dark_grey'])
-		self.play_text3_rect = self.play_text3.get_rect(center = (CENTER_X, HEIGHT - 40))
+		self.lives_text_shadow = None
+		self.lives_text_shadow_rect = None
+
+		self.play_text3 = None
+		self.play_text3_rect = None
 
 		# Game Over
 		self.game_over_text1 = self.FONTS['h1'].render('GAME OVER', False, self.COLOURS['white'])
@@ -244,7 +279,7 @@ class Text:
 		self.fps_text2 = self.FONTS['h3'].render(str(fps), False, fps_colour, self.COLOURS['black'])
 		self.fps_text2_rect = self.fps_text2.get_rect(topleft = (75, 0))
 
-		if self.game.get_state() == self.game.S_PLAY:
+		if self.game.get_state() == self.game.STATES['play']:
 
 			self.score_text = self.FONTS['h1'].render(str(self.game.score), False, self.COLOURS['white'])
 			self.score_text_rect = self.score_text.get_rect(center = (CENTER_X, 120))
@@ -252,8 +287,15 @@ class Text:
 			self.highscore_text = self.FONTS['h2'].render(str(self.game.highscore), False, self.COLOURS['grey'])
 			self.highscore_text_rect = self.highscore_text.get_rect(center = (CENTER_X, 30))
 
-			self.lives_text = self.FONTS['h1'].render(str(self.game.player.sprite.lives), False, [self.COLOURS['red'], self.COLOURS['red'], self.COLOURS['yellow'], self.COLOURS['green']][self.game.player.sprite.lives])
+			self.play_text3 = self.FONTS['h3'].render('Lives' if self.game.player.sprite.lives != 1 else 'Life', False, self.COLOURS['dark_grey'])
+			self.play_text3_rect = self.play_text3.get_rect(center = (CENTER_X, HEIGHT - 30))
+
+			self.lives_text = self.FONTS['h1'].render(str(self.game.player.sprite.lives), False, [self.COLOURS['red'], self.COLOURS['red'], self.COLOURS['yellow'], self.COLOURS['green']][self.game.player.sprite.lives] if self.game.player.sprite.lives <= 3 else self.COLOURS['green'])
 			self.lives_text_rect = self.lives_text.get_rect(midbottom = (CENTER_X, HEIGHT - 40))
+
+			self.lives_text_shadow = self.FONTS['h1'].render(str(self.game.player.sprite.lives), False, self.COLOURS['black'])
+			self.lives_text_shadow.set_alpha(128)
+			self.lives_text_shadow_rect = self.lives_text.get_rect(midbottom = (CENTER_X, HEIGHT - 35))
 
 			self.texts = [
 
@@ -266,12 +308,13 @@ class Text:
 				[self.highscore_text, self.highscore_text_rect],
 				[self.play_text2, self.play_text2_rect],
 
+				[self.lives_text_shadow, self.lives_text_shadow_rect],
 				[self.lives_text, self.lives_text_rect],
 				[self.play_text3, self.play_text3_rect]
 
 			]
 
-		elif self.game.get_state() == self.game.S_GAME_OVER:
+		elif self.game.get_state() == self.game.STATES['game_over']:
 
 			self.texts = [
 
@@ -294,14 +337,14 @@ class Cursor:
 		self.game = game
 		self.ROTATE_SPEED = 500
 		self.angle = 0
-		self.index = {self.game.S_PLAY: 1, self.game.S_GAME_OVER: 0}[self.game.get_state()]
+		self.index = {self.game.STATES['play']: 1, self.game.STATES['game_over']: 0}[self.game.get_state()]
 
-		self.cursor_unfocus_image = pygame.transform.scale_by(pygame.image.load(f'Images/Cursor/Cursor/Unfocus.png'), 3).convert_alpha()
-		self.cursor_focus_image = pygame.transform.scale_by(pygame.image.load(f'Images/Cursor/Cursor/Focus.png'), 3).convert_alpha()
+		self.cursor_unfocus_image = pygame.transform.scale_by(pygame.image.load(f'Images/UI/Cursor/Cursor/Unfocus.png'), 3).convert_alpha()
+		self.cursor_focus_image = pygame.transform.scale_by(pygame.image.load(f'Images/UI/Cursor/Cursor/Focus.png'), 3).convert_alpha()
 		self.focussed = False
 		
-		self.crosshair_unfocus_image = pygame.transform.scale_by(pygame.image.load(f'Images/Cursor/Crosshair/Unfocus.png'), 3).convert_alpha()
-		self.crosshair_focus_image = pygame.transform.scale_by(pygame.image.load(f'Images/Cursor/Crosshair/Focus.png'), 3).convert_alpha()
+		self.crosshair_unfocus_image = pygame.transform.scale_by(pygame.image.load(f'Images/UI/Cursor/Crosshair/Unfocus.png'), 3).convert_alpha()
+		self.crosshair_focus_image = pygame.transform.scale_by(pygame.image.load(f'Images/UI/Cursor/Crosshair/Focus.png'), 3).convert_alpha()
 		self.focussed = False
 
 		self.images = [[self.cursor_unfocus_image, self.cursor_focus_image], [self.crosshair_unfocus_image, self.crosshair_focus_image]]
@@ -313,14 +356,14 @@ class Cursor:
 		self.cursor = pygame.cursors.Cursor((self.image.get_width() // 2, self.image.get_height() // 2), self.image)
 		pygame.mouse.set_cursor(self.cursor)
 
-		self.index = {self.game.S_PLAY: 1, self.game.S_GAME_OVER: 0}[self.game.get_state()]
+		self.index = {self.game.STATES['play']: 1, self.game.STATES['game_over']: 0}[self.game.get_state()]
 		self.image = self.images[self.index][self.focussed]
 		self.input(dt)
 
 	def input(self, dt: float | int) -> None:
 
 		self.focussed = pygame.mouse.get_pressed()[0]
-		if self.focussed and self.game.get_state() == self.game.S_PLAY: self.rotate(dt)
+		if self.focussed and self.game.get_state() == self.game.STATES['play']: self.rotate(dt)
 
 	def rotate(self, dt: float | int) -> None:
 
@@ -359,7 +402,7 @@ class Player(pygame.sprite.Sprite):
 		self.dead = False
 		self.death_time = 0
 		self.blink_index = 0
-		self.invincible = True
+		self.invincible = False
 		self.health = self.MAX_HEALTH
 
 		# Images
@@ -397,9 +440,11 @@ class Player(pygame.sprite.Sprite):
 		if not self.dead:
 
 			self.health_bar.update()
-			self.health_bar.draw(screen)
 			self.health_bar.sprite.segment.update()
+
+			self.health_bar.draw(screen)
 			self.health_bar.sprite.segment.draw(screen)
+			self.health_bar.sprite.render_font()
 
 	def input(self, dt: float | int) -> None:
 
@@ -427,7 +472,7 @@ class Player(pygame.sprite.Sprite):
 			if collided_lemonoids:
 
 				self.hit(5 - collided_lemonoids[0].size)
-				collided_lemonoids[0].death(True)
+				collided_lemonoids[0].death(False)
 				self.collided = True
 
 			else: self.collided = False
@@ -650,12 +695,12 @@ class Lemonoid(pygame.sprite.Sprite):
 		self.SCORES = {1: 100, 2: 50, 3: 20, 4: 10} # size: score gained when destroyed
 		self.MOVE_SPEED = move_speed
 		self.ROTATE_SPEED = 100 * size
-		self.DIRECTION = angle
+		self.DIRECTION = angle + 180 % 360
 		self.MAX_HEALTH = self.HEALTHS[size]
 		self.EXPLOSION_SHAKE_VEL = 8
 		
 		# Vars
-		self.angle = angle
+		self.angle = angle + 180 % 360
 		self.health = self.MAX_HEALTH
 		self.colliding = False
 		self.size = size
@@ -698,9 +743,10 @@ class Lemonoid(pygame.sprite.Sprite):
 		if self.size != 4:
 
 			self.health_bar.update()
-			self.health_bar.draw(screen)
 			self.health_bar.sprite.segment.update()
+			self.health_bar.draw(screen)
 			self.health_bar.sprite.segment.draw(screen)
+			self.health_bar.sprite.render_font()
 
 		self.move(dt)
 		self.rotate(dt)
@@ -725,7 +771,7 @@ class Lemonoid(pygame.sprite.Sprite):
 
 		x = cos(radians(self.DIRECTION)) * self.MOVE_SPEED * dt
 		y = sin(radians(self.DIRECTION)) * self.MOVE_SPEED * dt
-		self.pos -= (x + self.game.shake_offset[0], -y + self.game.shake_offset[1])
+		self.pos += (x + self.game.shake_offset[0], y - self.game.shake_offset[1])
 
 	def rotate(self, dt: float | int) -> None:
 
@@ -827,9 +873,9 @@ class Lemonoid(pygame.sprite.Sprite):
 
 				)
 		
-		else: self.death(False)
+		else: self.death(True)
 
-	def death(self, collide_player: bool) -> None:
+	def death(self, add_score: bool) -> None:
 
 		if self.size != 4:
 
@@ -856,7 +902,7 @@ class Lemonoid(pygame.sprite.Sprite):
 		if self.size == 1: self.game.play_sfx(self.explosion_sfx)
 		else: self.game.play_sfx(self.explosion_sfx_2)
 
-		if not collide_player: self.game.add_score(self.SCORES[self.size])
+		if add_score: self.game.add_score(self.SCORES[self.size])
 		self.death_animation(self.size)
 		self.kill()
 
@@ -868,7 +914,7 @@ class Explosion(pygame.sprite.Sprite):
 
 		self.TYPE = type
 		self.game = game
-		self.ROTATE_SPEED = 20
+		self.ROTATE_SPEED = 40
 		self.FADE_SPEED = 550
 		self.finished = False
 		self.alpha = 256
@@ -920,6 +966,7 @@ class Health_Bar(pygame.sprite.Sprite):
 
 		if self.TYPE == 'Base':
 
+			self.COLOURS = {'white': WHITE, 'black': BLACK}
 			self.MAX_HEALTH = self.parent.MAX_HEALTH
 			self.health = self.parent.health
 			self.health_percent = self.health / self.MAX_HEALTH
@@ -928,6 +975,16 @@ class Health_Bar(pygame.sprite.Sprite):
 			self.rect = self.image.get_rect(center = (self.parent.pos.x + self.OFFSET[0], self.parent.pos.y + self.OFFSET[1]))
 			self.pos = pygame.math.Vector2(self.rect.center)
 			self.segment = pygame.sprite.GroupSingle(Health_Bar(size = self.SIZE, offset = self.OFFSET, parent = self, type = 'Child'))
+
+			# Text
+			self.font = pygame.font.Font('Fonts/pixel_font.ttf', 15) #self.image.get_height() + 2)
+			self.font.set_bold(True)
+
+			self.text = None
+			self.text_rect = None
+
+			self.text_shadow = None
+			self.text_shadow_rect = None
 
 		if self.TYPE == 'Child':
 
@@ -946,8 +1003,17 @@ class Health_Bar(pygame.sprite.Sprite):
 
 			self.health = self.parent.health
 			self.health_percent = self.health / self.MAX_HEALTH
+			
 			self.pos = pygame.math.Vector2((self.parent.pos.x + self.OFFSET[0], self.parent.pos.y - self.OFFSET[1]))
 			self.rect.center = self.pos
+
+			self.text = self.font.render(str(self.health), False, self.COLOURS['white'])
+			self.text_rect = self.text.get_rect(midright = (self.pos[0] - self.image.get_width() / 2 - self.image.get_width() / 20, self.pos[1] - self.image.get_height() / 10))
+
+			self.text_shadow = self.font.render(str(self.health), False, self.COLOURS['black'])
+			self.text_shadow.set_alpha(128)
+			self.text_shadow_rect = self.text.get_rect(midright = (self.text_rect.midright[0], self.text_rect.midright[1] + self.image.get_height() / 10))
+
 			self.change_colour()
 
 		if self.TYPE == 'Child':
@@ -990,6 +1056,11 @@ class Health_Bar(pygame.sprite.Sprite):
 
 		self.pos.x = (self.parent.rect.topleft[0] + self.image.get_width() + (2 * self.SIZE)) - self.image.get_width() * (((1 - self.parent.health_percent) * 2) % 1)
 		self.pos.y = self.parent.rect.topleft[1]
+
+	def render_font(self) -> None:
+
+		screen.blit(self.text_shadow, self.text_shadow_rect)
+		screen.blit(self.text, self.text_rect)
 
 class Particle(pygame.sprite.Sprite):
 
@@ -1044,6 +1115,30 @@ class Particle(pygame.sprite.Sprite):
 		self.image.set_alpha(self.alpha)
 		if self.alpha <= 0: self.kill()
 
+class Life_Count_Meter(pygame.sprite.Sprite):
+
+	def __init__(self, origin: tuple, index: int, ship: dict['index': int, 'max_lives': int | None] | None = None) -> None:
+
+		super().__init__()
+
+		self.TYPE = type
+		self.SIZE = 4
+		self.OFFSET = 10
+		self.INDEX = index
+		self.ORIGIN = origin
+		self.ship = ship
+
+		self.image = pygame.transform.rotate(pygame.transform.scale_by(pygame.image.load(f'Images/UI/Life Count Meter/Ship{self.ship['index']}.png'), self.SIZE), 90).convert_alpha()
+		self.rect = self.image.get_rect(center = (self.ORIGIN[0] - (((self.image.get_width() + self.OFFSET) * (self.ship['max_lives'] - 1)) / 2), self.ORIGIN[1]))
+		self.pos = pygame.math.Vector2(self.rect.center)
+
+	def update(self, player_lives: int) -> None:
+
+		self.rect.center = self.pos
+
+		if player_lives - 1 < self.INDEX: self.kill()
+		self.pos[0] = (self.ORIGIN[0] - (((self.image.get_width() + self.OFFSET) * (player_lives - 1)) / 2)) + (self.OFFSET + self.image.get_width()) * self.INDEX
+
 def main() -> None:
 
 	game = Game(
@@ -1076,6 +1171,7 @@ def main() -> None:
 	explosions = game.explosions
 	cursor = game.cursor
 	particles = game.particles
+	life_count_meter = game.life_count_meter
 
 	pygame.display.set_caption('Lemonoids')
 
@@ -1093,7 +1189,7 @@ def main() -> None:
 				pygame.quit()
 				exit()
 
-			if game.get_state() == game.S_PLAY:
+			if game.get_state() == game.STATES['play']:
 
 				if event.type == game.LEMONOID_TIMER:
 
@@ -1104,17 +1200,16 @@ def main() -> None:
 				if event.type == player.sprite.BLINK_TIMER:
 					player.sprite.blink()
 
-			if game.get_state() == game.S_GAME_OVER:
+			if game.get_state() == game.STATES['game_over']:
 
 				if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
 
-					game.reset()
-					game.respawn()
-					game.set_state(game.S_PLAY)
+					game.set_game()
+					game.set_state(game.STATES['play'])
 
 		screen.fill(BG_COLOUR)
 
-		if game.get_state() == game.S_PLAY:
+		if game.get_state() == game.STATES['play']:
 
 			# Game
 			game.update()
@@ -1145,11 +1240,14 @@ def main() -> None:
 						
 					if player.sprite.lives <= 0: game.game_over()
 					else: player.sprite.respawn()
-
 			
 			# Lemonoids
 			lemonoids.draw(screen)
 			lemonoids.update(dt)
+
+			# Life Count Meter
+			life_count_meter.update(player_lives = player.sprite.lives)
+			life_count_meter.draw(screen)
 
 		# Text
 		text.update()

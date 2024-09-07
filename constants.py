@@ -20,4 +20,4 @@ SFX_VOL = 1
 MUSIC_VOL = 0
 
 # Explosion
-EXPLOSION_FRAME_COUNT = 10 # (1-360, higher = slower load time, higher possible explosion rotate speed & vice versa)
+EXPLOSION_FRAME_COUNT = 20 # (1-360, higher = slower load time, higher possible explosion rotate speed, lower = vice versa)
