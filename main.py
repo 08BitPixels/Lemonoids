@@ -10,8 +10,9 @@ from constants import *
 
 # TO DO
 # -------------------
-# - Health Bar not synced with main body
 # - Lemonoid self collisions (not destrtoy if collisding on spawn)
+# 	- lemonoids not pointing correct dir on spawn
+#   - issues w/ 'first collision' system
 # - Ship 2 + 3
 # - Game Over Screen
 # 	- Previous Scores
@@ -85,7 +86,7 @@ class Game:
 		self.player = pygame.sprite.GroupSingle(Player(game = self))
 		self.cursor = Cursor(game = self)
 		self.lemonoids = pygame.sprite.Group()
-		for i in range(3): self.lemonoids.add(Lemonoid(angle = randint(0, 360), move_speed = 75, size = 1, game = self))
+		for i in range(3): self.lemonoids.add(Lemonoid(angle = i * 120, move_speed = 75, size = 1, game = self))
 		self.explosions = pygame.sprite.Group()
 		self.text = Text(game = self)
 		self.particles = pygame.sprite.Group()
@@ -402,7 +403,7 @@ class Player(pygame.sprite.Sprite):
 		self.dead = False
 		self.death_time = 0
 		self.blink_index = 0
-		self.invincible = False
+		self.invincible = True
 		self.health = self.MAX_HEALTH
 
 		# Images
@@ -697,13 +698,15 @@ class Lemonoid(pygame.sprite.Sprite):
 		self.ROTATE_SPEED = 100 * size
 		self.DIRECTION = angle + 180 % 360
 		self.MAX_HEALTH = self.HEALTHS[size]
-		self.EXPLOSION_SHAKE_VEL = 8
+		self.EXPLOSION_SHAKE_VEL = 4
 		
 		# Vars
 		self.angle = angle + 180 % 360
-		self.health = self.MAX_HEALTH
-		self.colliding = False
+		self.start_angle = angle
 		self.size = size
+		self.health = self.MAX_HEALTH
+		self.colliding = {'laser': False, 'lemonoid': False}
+		self.colliding_first = 'not yet'
 
 		# Images
 		self.og_image = pygame.transform.rotate(pygame.transform.scale_by(pygame.image.load(f'Images/Lemonoid/Lemonoid{self.size}.png'), 2.5), self.angle).convert_alpha()
@@ -711,7 +714,7 @@ class Lemonoid(pygame.sprite.Sprite):
 		self.image = self.og_image
 
 		# Rects, Vectors, Masks
-		if self.size == 1: self.rect = self.image.get_rect(center = (CENTER_X + cos(radians(self.angle)) * WIDTH, CENTER_Y - sin(radians(self.angle)) * WIDTH))
+		if self.size == 1: self.rect = self.image.get_rect(center = (CENTER_X + cos(radians(angle)) * 250, CENTER_Y - sin(radians(angle)) * 250))
 		else: self.rect = self.image.get_rect(center = pos)
 		self.mask = pygame.mask.from_surface(self.image)
 		self.pos = pygame.math.Vector2(self.rect.center)
@@ -755,17 +758,52 @@ class Lemonoid(pygame.sprite.Sprite):
 
 	def input(self) -> None:
 
+		# Laser Collisions
 		if pygame.sprite.spritecollide(self, self.game.player.sprite.lasers_fired, False, pygame.sprite.collide_rect):
 
 			collided_lasers = pygame.sprite.spritecollide(self, self.game.player.sprite.lasers_fired, False, pygame.sprite.collide_mask)
 
-			if collided_lasers and not self.colliding: 
+			if collided_lasers and not self.colliding['laser']: 
 				
-				self.hit(relative_collision_pos = pygame.sprite.collide_mask(self, collided_lasers[0] if collided_lasers else self.game.player.sprite), damage = collided_lasers[0].DAMAGES[collided_lasers[0].laser_index])
+				self.hit(relative_collision_pos = pygame.sprite.collide_mask(self, collided_lasers[0]), damage = collided_lasers[0].DAMAGES[collided_lasers[0].laser_index])
 				for laser in collided_lasers: laser.hit()
-				self.colliding = True
+				self.colliding['laser'] = True
 
-			else: self.colliding = False
+			else: self.colliding['laser'] = False
+
+		# Other Lemonoid Collisions
+		other_lemonoids = self.game.lemonoids.copy()
+		other_lemonoids.remove(self)
+		if self.start_angle == 0: print(self.colliding_first)
+
+		if pygame.sprite.spritecollide(self, other_lemonoids, False, pygame.sprite.collide_rect):
+
+			collided_lemonoids = pygame.sprite.spritecollide(self, other_lemonoids, False, pygame.sprite.collide_mask)
+			if self.start_angle == 0: print(collided_lemonoids)
+
+			if collided_lemonoids and not self.colliding['lemonoid']:
+
+				if self.start_angle == 0: print('collision')
+				
+				if self.colliding_first == 'not yet': 
+					
+					self.colliding_first = 'yes'
+					if self.start_angle == 0: print('colliding first') 
+
+				if self.colliding_first == 'no':
+					
+					self.hit(relative_collision_pos = pygame.sprite.collide_mask(self, collided_lemonoids[0]), damage = 4 - (self.size - 1))
+					self.colliding['lemonoid'] = True
+					if self.start_angle == 0: print('colliding after first')
+
+			else:
+				
+				if self.colliding_first == 'yes': 
+
+					self.colliding_first == 'no'
+					if self.start_angle == 0: print('first collision ended')
+
+				self.colliding['lemonoid'] = False
 			
 	def move(self, dt: float | int) -> None:
 
@@ -977,7 +1015,7 @@ class Health_Bar(pygame.sprite.Sprite):
 			self.segment = pygame.sprite.GroupSingle(Health_Bar(size = self.SIZE, offset = self.OFFSET, parent = self, type = 'Child'))
 
 			# Text
-			self.font = pygame.font.Font('Fonts/pixel_font.ttf', 15) #self.image.get_height() + 2)
+			self.font = pygame.font.Font('Fonts/pixel_font.ttf', 15)
 			self.font.set_bold(True)
 
 			self.text = None
