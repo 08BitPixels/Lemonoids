@@ -13,6 +13,7 @@ from constants import *
 # - Lemonoid self collisions (not destrtoy if collisding on spawn)
 # 	- lemonoids not pointing correct dir on spawn
 #   - issues w/ 'first collision' system
+# - Text Shadow
 # - Ship 2 + 3
 # - Game Over Screen
 # 	- Previous Scores
@@ -86,7 +87,7 @@ class Game:
 		self.player = pygame.sprite.GroupSingle(Player(game = self))
 		self.cursor = Cursor(game = self)
 		self.lemonoids = pygame.sprite.Group()
-		for i in range(3): self.lemonoids.add(Lemonoid(angle = i * 120, move_speed = 75, size = 1, game = self))
+		for i in range(2): self.lemonoids.add(Lemonoid(angle = i * 180, move_speed = 75, size = 1, game = self))
 		self.explosions = pygame.sprite.Group()
 		self.text = Text(game = self)
 		self.particles = pygame.sprite.Group()
@@ -714,7 +715,7 @@ class Lemonoid(pygame.sprite.Sprite):
 		self.image = self.og_image
 
 		# Rects, Vectors, Masks
-		if self.size == 1: self.rect = self.image.get_rect(center = (CENTER_X + cos(radians(angle)) * 250, CENTER_Y - sin(radians(angle)) * 250))
+		if self.size == 1: self.rect = self.image.get_rect(center = (0, 0))#(CENTER_X + cos(radians(angle)) * 250, CENTER_Y - sin(radians(angle)) * 250))
 		else: self.rect = self.image.get_rect(center = pos)
 		self.mask = pygame.mask.from_surface(self.image)
 		self.pos = pygame.math.Vector2(self.rect.center)
@@ -743,7 +744,7 @@ class Lemonoid(pygame.sprite.Sprite):
 		self.rect.center = self.pos
 		self.mask = pygame.mask.from_surface(self.image)
 
-		if self.size != 4:
+		if self.size != 4 and self.health > 0:
 
 			self.health_bar.update()
 			self.health_bar.sprite.segment.update()
@@ -767,7 +768,7 @@ class Lemonoid(pygame.sprite.Sprite):
 
 			if collided_lasers and not self.colliding['laser']: 
 				
-				self.hit(relative_collision_pos = pygame.sprite.collide_mask(self, collided_lasers[0]), damage = collided_lasers[0].DAMAGES[collided_lasers[0].laser_index])
+				self.hit(relative_collision_pos = pygame.sprite.collide_mask(self, collided_lasers[0]), damage = collided_lasers[0].DAMAGES[collided_lasers[0].laser_index], object_type = 'lemonoid')
 				for laser in collided_lasers: laser.hit()
 				self.colliding['laser'] = True
 
@@ -787,7 +788,9 @@ class Lemonoid(pygame.sprite.Sprite):
 
 				if not self.colliding_first: 
 					
-					self.hit(relative_collision_pos = pygame.sprite.collide_mask(self, collided_lemonoids[0]), damage = 4 - (self.size - 1))
+					self.hit(relative_collision_pos = pygame.sprite.collide_mask(self, collided_lemonoids[0]), damage = 4 - (collided_lemonoids[0].size - 1), object_type = 'lemonoid', add_score = False)
+					collided_lemonoids[0].hit(relative_collision_pos = pygame.sprite.collide_mask(self, collided_lemonoids[0]), damage = 4 - (self.size - 1), object_type = 'lemonoid')
+				
 					self.colliding['lemonoid'] = True
 
 			else:
@@ -862,28 +865,28 @@ class Lemonoid(pygame.sprite.Sprite):
 
 			)	
 
-	def hit(self, relative_collision_pos: tuple | pygame.math.Vector2, damage: int) -> None:
+	def hit(self, relative_collision_pos: tuple | pygame.math.Vector2, damage: int, object_type: str, add_score: bool = True) -> None:
 
 		self.health -= damage
 
 		# SFX
 		self.game.play_sfx(self.hit_sfx)
-		self.game.add_score(5)
+		if add_score: self.game.add_score(5)
 		
 		# Flash Effect
 		array = pygame.PixelArray(self.image)
 		array.replace((255, 228, 0), (255, 255, 255))
 		array.close()
 
-		if self.health > 0:
+		if object_type == 'laser':
 
-			# Position of Collision with Laser
+			# Position of Collision
 			screen_collision_pos = (self.rect.topleft[0] + relative_collision_pos[0], self.rect.topleft[1] + relative_collision_pos[1])
 
 			x = self.pos.x - screen_collision_pos[0]
 			y = self.pos.y - screen_collision_pos[1]
 			angle = (int(degrees(atan2(-y, x) % (2 * pi))) + 180) % 360
-			
+
 			# Particles
 			for i in range(randint(2, 16)): 
 			
@@ -900,10 +903,10 @@ class Lemonoid(pygame.sprite.Sprite):
 					)
 
 				)
-		
-		else: self.death(True)
+			
+		if self.health <= 0: self.death(add_score)
 
-	def death(self, add_score: bool) -> None:
+	def death(self, add_score: bool =  True) -> None:
 
 		if self.size != 4:
 
@@ -922,9 +925,9 @@ class Lemonoid(pygame.sprite.Sprite):
 
 				)
 
-			# Delete Heath Bar
-			self.health_bar.sprite.segment.empty()
-			self.health_bar.empty()
+				# Delete Heath Bar
+				self.health_bar.sprite.segment.empty()
+				self.health_bar.empty()
 
 		# Score, Animation, SFX
 		if self.size == 1: self.game.play_sfx(self.explosion_sfx)
@@ -981,7 +984,7 @@ class Explosion(pygame.sprite.Sprite):
 
 class Health_Bar(pygame.sprite.Sprite):
 
-	def __init__(self, offset: tuple, size: int | float, parent: object, type: str | None = 'Base') -> None:
+	def __init__(self, offset: tuple, size: int | float, parent: object, type: str = 'Base') -> None:
 
 		super().__init__()
 
@@ -1145,7 +1148,7 @@ class Particle(pygame.sprite.Sprite):
 
 class Life_Count_Meter(pygame.sprite.Sprite):
 
-	def __init__(self, origin: tuple, index: int, ship: dict['index': int, 'max_lives': int | None] | None = None) -> None:
+	def __init__(self, origin: tuple, index: int, ship: dict['index': int, 'max_lives': int | None] = None) -> None:
 
 		super().__init__()
 
