@@ -702,11 +702,11 @@ class Lemonoid(pygame.sprite.Sprite):
 		
 		# Vars
 		self.angle = angle + 180 % 360
-		self.start_angle = angle
 		self.size = size
 		self.health = self.MAX_HEALTH
 		self.colliding = {'laser': False, 'lemonoid': False}
-		self.colliding_first = 'not yet'
+		self.colliding_first = False
+		self.first_frame = True
 
 		# Images
 		self.og_image = pygame.transform.rotate(pygame.transform.scale_by(pygame.image.load(f'Images/Lemonoid/Lemonoid{self.size}.png'), 2.5), self.angle).convert_alpha()
@@ -756,6 +756,8 @@ class Lemonoid(pygame.sprite.Sprite):
 		self.wrap_around()
 		self.input()
 
+		if self.first_frame == True: self.first_frame == False
+
 	def input(self) -> None:
 
 		# Laser Collisions
@@ -774,35 +776,23 @@ class Lemonoid(pygame.sprite.Sprite):
 		# Other Lemonoid Collisions
 		other_lemonoids = self.game.lemonoids.copy()
 		other_lemonoids.remove(self)
-		if self.start_angle == 0: print(self.colliding_first)
 
 		if pygame.sprite.spritecollide(self, other_lemonoids, False, pygame.sprite.collide_rect):
 
 			collided_lemonoids = pygame.sprite.spritecollide(self, other_lemonoids, False, pygame.sprite.collide_mask)
-			if self.start_angle == 0: print(collided_lemonoids)
 
 			if collided_lemonoids and not self.colliding['lemonoid']:
 
-				if self.start_angle == 0: print('collision')
-				
-				if self.colliding_first == 'not yet': 
-					
-					self.colliding_first = 'yes'
-					if self.start_angle == 0: print('colliding first') 
+				if self.first_frame: self.colliding_first == True
 
-				if self.colliding_first == 'no':
+				if not self.colliding_first: 
 					
 					self.hit(relative_collision_pos = pygame.sprite.collide_mask(self, collided_lemonoids[0]), damage = 4 - (self.size - 1))
 					self.colliding['lemonoid'] = True
-					if self.start_angle == 0: print('colliding after first')
 
 			else:
 				
-				if self.colliding_first == 'yes': 
-
-					self.colliding_first == 'no'
-					if self.start_angle == 0: print('first collision ended')
-
+				if self.colliding_first: self.colliding_first == False
 				self.colliding['lemonoid'] = False
 			
 	def move(self, dt: float | int) -> None:
