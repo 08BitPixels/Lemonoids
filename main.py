@@ -10,9 +10,9 @@ from constants import *
 
 # TO DO
 # -------------------
-# - Lemonoid self collisions (not destrtoy if collisding on spawn)
-# 	- lemonoids not pointing correct dir on spawn
-#   - issues w/ 'first collision' system
+# - lemonoids not going through center screen
+# - Lemonoid health bar non existent on death
+# - issues w/ 'first collision' system
 # - Text Shadow
 # - Ship 2 + 3
 # - Game Over Screen
@@ -87,7 +87,7 @@ class Game:
 		self.player = pygame.sprite.GroupSingle(Player(game = self))
 		self.cursor = Cursor(game = self)
 		self.lemonoids = pygame.sprite.Group()
-		for i in range(2): self.lemonoids.add(Lemonoid(angle = i * 180, move_speed = 75, size = 1, game = self))
+		for i in range(3): self.lemonoids.add(Lemonoid(angle = randint(0, 360), move_speed = 75, size = 1, game = self))
 		self.explosions = pygame.sprite.Group()
 		self.text = Text(game = self)
 		self.particles = pygame.sprite.Group()
@@ -687,22 +687,23 @@ class Laser(pygame.sprite.Sprite):
 		
 class Lemonoid(pygame.sprite.Sprite):
 
-	def __init__(self, angle: int, move_speed: int, size: int | float, game: Game, pos: tuple = None) -> None:
+	def __init__(self, angle: int, move_speed: int, size: int | float, game: Game, pos: tuple | None = None) -> None:
 
 		super().__init__()
 
 		# Constant Vars
 		self.game = game
+		self.DEBUG = False
 		self.HEALTHS = {1: 10, 2: 4, 3: 2, 4: 1} # size: health
 		self.SCORES = {1: 100, 2: 50, 3: 20, 4: 10} # size: score gained when destroyed
 		self.MOVE_SPEED = move_speed
-		self.ROTATE_SPEED = 100 * size
+		self.ROTATE_SPEED = randint(75, 125) * size
 		self.DIRECTION = angle + 180 % 360
 		self.MAX_HEALTH = self.HEALTHS[size]
 		self.EXPLOSION_SHAKE_VEL = 4
 		
 		# Vars
-		self.angle = angle + 180 % 360
+		self.angle = self.DIRECTION
 		self.size = size
 		self.health = self.MAX_HEALTH
 		self.colliding = {'laser': False, 'lemonoid': False}
@@ -710,12 +711,12 @@ class Lemonoid(pygame.sprite.Sprite):
 		self.first_frame = True
 
 		# Images
-		self.og_image = pygame.transform.rotate(pygame.transform.scale_by(pygame.image.load(f'Images/Lemonoid/Lemonoid{self.size}.png'), 2.5), self.angle).convert_alpha()
+		self.og_image = pygame.transform.scale_by(pygame.image.load(f'Images/Lemonoid/{'Debug' if self.DEBUG else 'Normal'}/{self.size}.png'), 2.5).convert_alpha()
 		self.particle_images = [pygame.image.load(f'Images/Lemonoid/Break/Particle{i}.png').convert_alpha() for i in range(2)]
-		self.image = self.og_image
+		self.image = pygame.transform.rotate(self.og_image, self.angle).convert_alpha()
 
-		# Rects, Vectors, Masks
-		if self.size == 1: self.rect = self.image.get_rect(center = (0, 0))#(CENTER_X + cos(radians(angle)) * 250, CENTER_Y - sin(radians(angle)) * 250))
+		# Rects, Vectors, Masks, Pos
+		if self.size == 1: self.rect = self.image.get_rect(center = (CENTER_X + cos(radians(angle)) * WIDTH, CENTER_Y - sin(radians(angle)) * WIDTH))
 		else: self.rect = self.image.get_rect(center = pos)
 		self.mask = pygame.mask.from_surface(self.image)
 		self.pos = pygame.math.Vector2(self.rect.center)
@@ -773,7 +774,8 @@ class Lemonoid(pygame.sprite.Sprite):
 				self.colliding['laser'] = True
 
 			else: self.colliding['laser'] = False
-
+		
+		'''
 		# Other Lemonoid Collisions
 		other_lemonoids = self.game.lemonoids.copy()
 		other_lemonoids.remove(self)
@@ -797,12 +799,13 @@ class Lemonoid(pygame.sprite.Sprite):
 				
 				if self.colliding_first: self.colliding_first == False
 				self.colliding['lemonoid'] = False
-			
+		'''
+
 	def move(self, dt: float | int) -> None:
 
 		x = cos(radians(self.DIRECTION)) * self.MOVE_SPEED * dt
 		y = sin(radians(self.DIRECTION)) * self.MOVE_SPEED * dt
-		self.pos += (x + self.game.shake_offset[0], y - self.game.shake_offset[1])
+		self.pos += (x + self.game.shake_offset[0], -y - self.game.shake_offset[1])
 
 	def rotate(self, dt: float | int) -> None:
 
