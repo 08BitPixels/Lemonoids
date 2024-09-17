@@ -10,7 +10,7 @@ from constants import *
 
 # TO DO
 # -------------------
-# - lemonoids not going through center screen
+# - lemonoids not going through center screen (zoom out screen)
 # - Lemonoid health bar non existent on death
 # - issues w/ 'first collision' system
 # - Text Shadow
@@ -76,6 +76,7 @@ class Game:
 		self.COLOURS = colours
 		self.FONTS = fonts
 		self.EXPLOSION_FRAME_COUNT = explosions['frame_count']
+		self.DEBUG = True
 
 		self.state = self.STATES['play']
 		self.score = 0
@@ -87,7 +88,7 @@ class Game:
 		self.player = pygame.sprite.GroupSingle(Player(game = self))
 		self.cursor = Cursor(game = self)
 		self.lemonoids = pygame.sprite.Group()
-		for i in range(3): self.lemonoids.add(Lemonoid(angle = randint(0, 360), move_speed = 75, size = 1, game = self))
+		for i in range(1): self.lemonoids.add(Lemonoid(angle = randint(0, 360), move_speed = 75, size = 1, game = self))
 		self.explosions = pygame.sprite.Group()
 		self.text = Text(game = self)
 		self.particles = pygame.sprite.Group()
@@ -693,7 +694,6 @@ class Lemonoid(pygame.sprite.Sprite):
 
 		# Constant Vars
 		self.game = game
-		self.DEBUG = False
 		self.HEALTHS = {1: 10, 2: 4, 3: 2, 4: 1} # size: health
 		self.SCORES = {1: 100, 2: 50, 3: 20, 4: 10} # size: score gained when destroyed
 		self.MOVE_SPEED = move_speed
@@ -709,14 +709,15 @@ class Lemonoid(pygame.sprite.Sprite):
 		self.colliding = {'laser': False, 'lemonoid': False}
 		self.colliding_first = False
 		self.first_frame = True
+		self.outside_frame_on_spawn = True
 
 		# Images
-		self.og_image = pygame.transform.scale_by(pygame.image.load(f'Images/Lemonoid/{'Debug' if self.DEBUG else 'Normal'}/{self.size}.png'), 2.5).convert_alpha()
+		self.og_image = pygame.transform.scale_by(pygame.image.load(f'Images/Lemonoid/Normal/{self.size}.png'), 2.5).convert_alpha()
 		self.particle_images = [pygame.image.load(f'Images/Lemonoid/Break/Particle{i}.png').convert_alpha() for i in range(2)]
 		self.image = pygame.transform.rotate(self.og_image, self.angle).convert_alpha()
 
 		# Rects, Vectors, Masks, Pos
-		if self.size == 1: self.rect = self.image.get_rect(center = (CENTER_X + cos(radians(angle)) * WIDTH, CENTER_Y - sin(radians(angle)) * WIDTH))
+		if self.size == 1: self.rect = self.image.get_rect(center = (CENTER_X + cos(radians(angle)) * max(WIDTH, HEIGHT), CENTER_Y - sin(radians(angle)) * max(WIDTH, HEIGHT)))
 		else: self.rect = self.image.get_rect(center = pos)
 		self.mask = pygame.mask.from_surface(self.image)
 		self.pos = pygame.math.Vector2(self.rect.center)
@@ -745,6 +746,35 @@ class Lemonoid(pygame.sprite.Sprite):
 		self.rect.center = self.pos
 		self.mask = pygame.mask.from_surface(self.image)
 
+		self.move(dt)
+		self.rotate(dt)
+		if not self.outside_frame_on_spawn: self.wrap_around()
+		self.input()
+
+		if self.outside_frame_on_spawn and not self.check_outside_frame(): self.outside_frame_on_spawn = False
+		if self.first_frame == True: self.first_frame == False
+
+	def render_debug(self) -> None:
+
+		'self.og_image.get_width() * (2 / 3)'
+
+		pygame.draw.line(
+			surface = screen, 
+			color = 'Blue', 
+			start_pos = self.pos, 
+			end_pos = (self.pos.x + cos(radians(self.DIRECTION)) * 2000, self.pos.y - sin(radians(self.DIRECTION)) * 2000), 
+			width = 2
+		)
+		pygame.draw.line(
+			surface = screen, 
+			color = 'Red', 
+			start_pos = self.pos, 
+			end_pos = (self.pos.x + cos(radians(self.angle)) * self.og_image.get_width() / 2, self.pos.y - sin(radians(self.angle)) * self.og_image.get_width() / 2), 
+			width = 2
+		)
+
+	def render_health_bar(self) -> None:
+
 		if self.size != 4 and self.health > 0:
 
 			self.health_bar.update()
@@ -752,13 +782,6 @@ class Lemonoid(pygame.sprite.Sprite):
 			self.health_bar.draw(screen)
 			self.health_bar.sprite.segment.draw(screen)
 			self.health_bar.sprite.render_font()
-
-		self.move(dt)
-		self.rotate(dt)
-		self.wrap_around()
-		self.input()
-
-		if self.first_frame == True: self.first_frame == False
 
 	def input(self) -> None:
 
@@ -819,6 +842,9 @@ class Lemonoid(pygame.sprite.Sprite):
 		elif self.pos.x < 0 - self.image.get_width() / 2: self.pos.x = WIDTH + self.image.get_width() / 2
 		if self.pos.y > HEIGHT + self.image.get_height() / 2: self.pos.y = 0 - self.image.get_height() / 2
 		elif self.pos.y < 0 - self.image.get_height() / 2: self.pos.y = HEIGHT + self.image.get_height() / 2
+
+	def check_outside_frame(self) -> bool:
+		return ((self.pos.x > WIDTH + self.image.get_width() / 2) or (self.pos.x < 0 - self.image.get_width() / 2) or (self.pos.y > HEIGHT + self.image.get_height() / 2) or (self.pos.y < 0 - self.image.get_height() / 2))
 
 	def death_animation(self, size: int | float) -> None:
 
@@ -1276,8 +1302,10 @@ def main() -> None:
 					else: player.sprite.respawn()
 			
 			# Lemonoids
-			lemonoids.draw(screen)
 			lemonoids.update(dt)
+			lemonoids.draw(screen)
+			if game.DEBUG: [lemonoid.render_debug() for lemonoid in lemonoids]
+			for lemonoid in lemonoids: lemonoid.render_health_bar()
 
 			# Life Count Meter
 			life_count_meter.update(player_lives = player.sprite.lives)
