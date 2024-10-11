@@ -10,9 +10,8 @@ from constants import *
 
 # TO DO
 # -------------------
-# - lemonoids not going through center screen (zoom out screen)
-# - Lemonoid health bar non existent on death
-# - issues w/ 'first collision' system
+# - Health Bar non existent on death
+# - Issues w/ 'first collision' system
 # - Text Shadow
 # - Ship 2 + 3
 # - Game Over Screen
@@ -21,13 +20,13 @@ from constants import *
 
 # PYGAME SETUP
 pygame.init()
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
+screen = pygame.display.set_mode((WINDOW_W, WINDOW_H))
 clock = pygame.time.Clock()
 
 # Fonts
-h1_font = pygame.font.Font('Fonts/pixel_font.ttf', 75)
-h2_font = pygame.font.Font('Fonts/pixel_font.ttf', 50)
-h3_font = pygame.font.Font('Fonts/pixel_font.ttf', 25)
+h1_font = pygame.font.Font('Fonts/pixel_font.ttf', int(75 * SCALE))
+h2_font = pygame.font.Font('Fonts/pixel_font.ttf', int(50 * SCALE))
+h3_font = pygame.font.Font('Fonts/pixel_font.ttf', int(25 * SCALE))
 
 # Window Setup
 pygame.display.set_icon(pygame.image.load('Images/UI/Icon.ico'))
@@ -35,7 +34,7 @@ pygame.display.set_caption('Lemonoids | INITIALISING...')
 screen.fill(BG_COLOUR)
 # Cover
 cover = pygame.image.load('Images/UI/Cover/Cover.png').convert_alpha()
-cover = pygame.transform.scale(cover, fittnail.execute(img_size = cover.get_size(), screen_size = screen.get_size())).convert_alpha()
+cover = pygame.transform.scale(cover, fittnail.execute(img_size = cover.get_size(), screen_size = (WIDTH, HEIGHT))).convert_alpha()
 screen.blit(cover, cover.get_rect(center = (CENTER_X, CENTER_Y)))
 pygame.display.update()
 
@@ -44,6 +43,12 @@ class Game:
 	def __init__(
 			
 			self, 
+			screen: dict[
+				'scale': int | float
+			],
+			game: dict[
+				'debug': bool
+			],
 			audio: dict[
 				'sfx_vol': int | float,
 				'music_vol': int | float
@@ -75,8 +80,9 @@ class Game:
 		self.SFX_VOL = audio['sfx_vol']
 		self.COLOURS = colours
 		self.FONTS = fonts
+		self.SCALE = screen['scale']
 		self.EXPLOSION_FRAME_COUNT = explosions['frame_count']
-		self.DEBUG = True
+		self.DEBUG = game['debug']
 
 		self.state = self.STATES['play']
 		self.score = 0
@@ -93,7 +99,7 @@ class Game:
 		self.text = Text(game = self)
 		self.particles = pygame.sprite.Group()
 		self.life_count_meter = pygame.sprite.Group()
-		for i in range(self.player.sprite.MAX_LIVES): self.life_count_meter.add(Life_Count_Meter(index = i, ship = {'index': self.player.sprite.ship_index, 'max_lives': self.player.sprite.MAX_LIVES}, origin = (CENTER_X, HEIGHT - 79)))
+		for i in range(self.player.sprite.MAX_LIVES): self.life_count_meter.add(Life_Count_Meter(game = self, index = i, ship = {'index': self.player.sprite.ship_index, 'max_lives': self.player.sprite.MAX_LIVES}, origin = (CENTER_X, Y1 - 79)))
 
 		# Music
 		self.game_music = pygame.mixer.Sound('Audio/Music/game_music.wav')
@@ -145,6 +151,9 @@ class Game:
 		sfx = pygame.mixer.Sound(path)
 		sfx.set_volume(self.SFX_VOL)
 		return sfx
+
+	def load_img(self, path: str) -> pygame.surface.Surface:
+		return pygame.transform.scale_by(pygame.image.load(path), self.SCALE).convert_alpha()
 
 	def create_explosion_frames(self, frame_count: int) -> list:
 
@@ -219,7 +228,7 @@ class Game:
 				Life_Count_Meter(
 					index = i, 
 					ship = {'index': self.player.sprite.ship_index, 'max_lives': self.player.sprite.MAX_LIVES}, 
-					origin = (CENTER_X, HEIGHT - 79)
+					origin = (CENTER_X, Y1 - 79)
 				)
 			)
 
@@ -240,8 +249,8 @@ class Text:
 
 		# Texts
 
-		self.fps_text1 = self.FONTS['h3'].render('FPS:', False, self.COLOURS['grey'], self.COLOURS['black'])
-		self.fps_text1_rect = self.fps_text1.get_rect(topleft = (0, 0))
+		self.fps_text1 = self.FONTS['h3'].render('FPS', False, self.COLOURS['grey'], self.COLOURS['black'])
+		self.fps_text1_rect = self.fps_text1.get_rect(topleft = (X0, Y0))
 
 		self.fps_text2 = None
 		self.fps_text2_rect = None
@@ -251,13 +260,13 @@ class Text:
 		self.score_text_rect = None
 
 		self.play_text1 = self.FONTS['h3'].render('Score', False, self.COLOURS['dark_grey'])
-		self.play_text1_rect = self.play_text1.get_rect(center = (CENTER_X, 170))
+		self.play_text1_rect = self.play_text1.get_rect(center = (CENTER_X, Y0 + 170 * SCALE))
 
 		self.highscore_text = None
 		self.highscore_text_rect = None
 
 		self.play_text2 = self.FONTS['h3'].render('Highscore', False, self.COLOURS['dark_grey'])
-		self.play_text2_rect = self.play_text2.get_rect(center = (CENTER_X, 65))
+		self.play_text2_rect = self.play_text2.get_rect(center = (CENTER_X, Y0 + 70 * SCALE))
 
 		self.lives_text = None
 		self.lives_text_rect = None
@@ -273,32 +282,33 @@ class Text:
 		self.game_over_text1_rect = self.game_over_text1.get_rect(center = (CENTER_X, CENTER_Y))
 
 		self.game_over_text2 = self.FONTS['h3'].render('Press [SPACE] to retry', False, self.COLOURS['yellow'])
-		self.game_over_text2_rect = self.game_over_text2.get_rect(center = (CENTER_X, CENTER_Y + 45))
+		self.game_over_text2_rect = self.game_over_text2.get_rect(center = (CENTER_X, CENTER_Y + 45 * SCALE))
 
 	def update(self) -> None:
 
 		fps = round(clock.get_fps(), 1)
 		fps_colour = self.COLOURS['green'] if fps > 60 else self.COLOURS['yellow'] if fps < 60 and fps > 10 else self.COLOURS['red']
+
 		self.fps_text2 = self.FONTS['h3'].render(str(fps), False, fps_colour, self.COLOURS['black'])
-		self.fps_text2_rect = self.fps_text2.get_rect(topleft = (75, 0))
+		self.fps_text2_rect = self.fps_text2.get_rect(topleft = self.fps_text1_rect.topright)
 
 		if self.game.get_state() == self.game.STATES['play']:
 
 			self.score_text = self.FONTS['h1'].render(str(self.game.score), False, self.COLOURS['white'])
-			self.score_text_rect = self.score_text.get_rect(center = (CENTER_X, 120))
+			self.score_text_rect = self.score_text.get_rect(center = (CENTER_X, Y0 + 120 * SCALE))
 
 			self.highscore_text = self.FONTS['h2'].render(str(self.game.highscore), False, self.COLOURS['grey'])
-			self.highscore_text_rect = self.highscore_text.get_rect(center = (CENTER_X, 30))
+			self.highscore_text_rect = self.highscore_text.get_rect(center = (CENTER_X, Y0 + 30 * SCALE))
 
 			self.play_text3 = self.FONTS['h3'].render('Lives' if self.game.player.sprite.lives != 1 else 'Life', False, self.COLOURS['dark_grey'])
-			self.play_text3_rect = self.play_text3.get_rect(center = (CENTER_X, HEIGHT - 30))
+			self.play_text3_rect = self.play_text3.get_rect(center = (CENTER_X, Y1 - 30 * SCALE))
 
 			self.lives_text = self.FONTS['h1'].render(str(self.game.player.sprite.lives), False, [self.COLOURS['red'], self.COLOURS['red'], self.COLOURS['yellow'], self.COLOURS['green']][self.game.player.sprite.lives] if self.game.player.sprite.lives <= 3 else self.COLOURS['green'])
-			self.lives_text_rect = self.lives_text.get_rect(midbottom = (CENTER_X, HEIGHT - 40))
+			self.lives_text_rect = self.lives_text.get_rect(midbottom = (CENTER_X, Y1 - 40 * SCALE))
 
 			self.lives_text_shadow = self.FONTS['h1'].render(str(self.game.player.sprite.lives), False, self.COLOURS['black'])
 			self.lives_text_shadow.set_alpha(128)
-			self.lives_text_shadow_rect = self.lives_text.get_rect(midbottom = (CENTER_X, HEIGHT - 35))
+			self.lives_text_shadow_rect = self.lives_text.get_rect(midbottom = (CENTER_X, Y1 - 35 * SCALE))
 
 			self.texts = [
 
@@ -343,7 +353,7 @@ class Cursor:
 		self.index = {self.game.STATES['play']: 1, self.game.STATES['game_over']: 0}[self.game.get_state()]
 
 		self.cursor_unfocus_image = pygame.transform.scale_by(pygame.image.load(f'Images/UI/Cursor/Cursor/Unfocus.png'), 3).convert_alpha()
-		self.cursor_focus_image = pygame.transform.scale_by(pygame.image.load(f'Images/UI/Cursor/Cursor/Focus.png'), 3).convert_alpha()
+		self.cursor_focus_image = pygame.transform.scale_by(self.game.load_img(f'Images/UI/Cursor/Cursor/Focus.png'), 3).convert_alpha()
 		self.focussed = False
 		
 		self.crosshair_unfocus_image = pygame.transform.scale_by(pygame.image.load(f'Images/UI/Cursor/Crosshair/Unfocus.png'), 3).convert_alpha()
@@ -385,6 +395,7 @@ class Player(pygame.sprite.Sprite):
 		self.SIZE = 2.5
 		self.ACCELERATION_VEL = 0.999
 		self.SPEED = 3
+		self.MAX_SPEED = 3
 		self.FIRE_RATE = 0
 		self.FIRE_RATES = {0: 8} # ship index: fire rate
 		self.ACCURACIES = {0: 1} # ship index: accuracy (fire spread) in degrees
@@ -405,17 +416,16 @@ class Player(pygame.sprite.Sprite):
 		self.dead = False
 		self.death_time = 0
 		self.blink_index = 0
-		self.invincible = True
 		self.health = self.MAX_HEALTH
 
 		# Images
-		self.og_image = pygame.transform.scale_by(pygame.image.load(f'Images/Player/Ship{self.ship_index}/Normal.png'), self.SIZE).convert_alpha()
-		self.shoot_image = pygame.transform.scale_by(pygame.image.load(f'Images/Player/Ship{self.ship_index}/Shoot.png'), self.SIZE).convert_alpha()
-		self.thruster_image = pygame.transform.scale_by(pygame.image.load(f'Images/Player/Ship{self.ship_index}/Thruster.png'), self.SIZE).convert_alpha()
-		self.blink_image = pygame.transform.scale_by(pygame.image.load(f'Images/Player/Ship{self.ship_index}/Blink.png'), self.SIZE).convert_alpha()
+		self.og_image = pygame.transform.scale_by(self.game.load_img(f'Images/Player/Ship{self.ship_index}/Normal.png'), self.SIZE).convert_alpha()
+		self.shoot_image = pygame.transform.scale_by(self.game.load_img(f'Images/Player/Ship{self.ship_index}/Shoot.png'), self.SIZE).convert_alpha()
+		self.thruster_image = pygame.transform.scale_by(self.game.load_img(f'Images/Player/Ship{self.ship_index}/Thruster.png'), self.SIZE).convert_alpha()
+		self.blink_image = pygame.transform.scale_by(self.game.load_img(f'Images/Player/Ship{self.ship_index}/Blink.png'), self.SIZE).convert_alpha()
 
-		self.break_images = [pygame.transform.scale_by(pygame.image.load(f'Images/Player/Ship{self.ship_index}/Break/Break{i}.png'), self.SIZE).convert_alpha() for i in range(3)]
-		self.particle_images = [pygame.transform.scale_by(pygame.image.load(f'Images/Player/Ship{self.ship_index}/Break/Particle{i}.png'), self.SIZE).convert_alpha() for i in range(2)]
+		self.break_images = [pygame.transform.scale_by(self.game.load_img(f'Images/Player/Ship{self.ship_index}/Break/Break{i}.png'), self.SIZE).convert_alpha() for i in range(3)]
+		self.particle_images = [pygame.transform.scale_by(self.game.load_img(f'Images/Player/Ship{self.ship_index}/Break/Particle{i}.png'), self.SIZE).convert_alpha() for i in range(2)]
 
 		# Image, Rect, Mask, Pos
 		self.image = self.og_image
@@ -429,7 +439,7 @@ class Player(pygame.sprite.Sprite):
 		self.hit_sfx = self.game.load_sfx('Audio/SFX/Player/Hit.mp3')
 
 		self.lasers_fired = pygame.sprite.Group()
-		self.health_bar = pygame.sprite.GroupSingle(Health_Bar(offset = (0, -40), size = 0.75, parent = self))
+		self.health_bar = pygame.sprite.GroupSingle(Health_Bar(game = self.game, offset = (0, -40), size = 0.75, parent = self))
 
 		self.set_fire_rate()
 
@@ -468,7 +478,7 @@ class Player(pygame.sprite.Sprite):
 		elif not mouse_pressed and not keys_pressed[pygame.K_SPACE] and not self.dead: self.set_fire_rate()
 
 		# Collisions
-		if pygame.sprite.spritecollide(self, self.game.lemonoids, False, pygame.sprite.collide_rect) and not self.dead and not self.invincible:
+		if pygame.sprite.spritecollide(self, self.game.lemonoids, False, pygame.sprite.collide_rect) and not self.dead and not self.game.DEBUG:
 
 			collided_lemonoids = pygame.sprite.spritecollide(self, self.game.lemonoids, False, pygame.sprite.collide_mask)
 
@@ -564,19 +574,21 @@ class Player(pygame.sprite.Sprite):
 
 	def wrap_around(self) -> None:
 
-		if self.pos.x > WIDTH + self.image.get_width() / 2: self.pos.x = 0 - self.image.get_width() / 2
-		elif self.pos.x < 0 - self.image.get_width() / 2: self.pos.x = WIDTH + self.image.get_width() / 2
-		if self.pos.y > HEIGHT + self.image.get_height() / 2: self.pos.y = 0 - self.image.get_height() / 2
-		elif self.pos.y < 0 - self.image.get_height() / 2: self.pos.y = HEIGHT + self.image.get_height() / 2
+		if self.pos.x > X1 + self.image.get_width() / 2: self.pos.x = X0 - self.image.get_width() / 2
+		elif self.pos.x < X0 - self.image.get_width() / 2: self.pos.x = X1 + self.image.get_width() / 2
+		if self.pos.y > Y1 + self.image.get_height() / 2: self.pos.y = Y0 - self.image.get_height() / 2
+		elif self.pos.y < Y0 - self.image.get_height() / 2: self.pos.y = Y1 + self.image.get_height() / 2
 
 	def move(self, angle: int, momentum: int, dt: float | int) -> None:
 
-		self.x_vel += cos(radians(angle)) * self.ACCELERATION_VEL * momentum * self.SPEED * dt
-		self.x_vel = self.ACCELERATION_VEL * self.x_vel
+		self.x_vel += cos(radians(angle)) * self.ACCELERATION_VEL ** 2 * momentum * self.SPEED * dt
+		if self.x_vel > self.MAX_SPEED: self.x_vel = self.MAX_SPEED
+		if self.x_vel < -self.MAX_SPEED: self.x_vel = -self.MAX_SPEED
 		self.pos.x += self.x_vel + self.game.shake_offset[0]
 
-		self.y_vel += sin(radians(angle)) * self.ACCELERATION_VEL * momentum * self.SPEED * dt
-		self.y_vel = self.ACCELERATION_VEL * self.y_vel
+		self.y_vel += sin(radians(angle)) * self.ACCELERATION_VEL ** 2 * momentum * self.SPEED * dt
+		if self.y_vel > self.MAX_SPEED: self.y_vel = self.MAX_SPEED
+		if self.y_vel < -self.MAX_SPEED: self.y_vel = -self.MAX_SPEED
 		self.pos.y -= self.y_vel + self.game.shake_offset[1]
 
 	def rotate_to(self, pos: tuple, og_image: pygame.Surface) -> None:
@@ -654,8 +666,8 @@ class Laser(pygame.sprite.Sprite):
 		self.DAMAGES = {0: 1} # laser index: damage to lemonoid
 		self.collided = 0
 
-		self.image = pygame.transform.rotate(pygame.transform.scale_by(pygame.image.load(f'Images/Laser/Laser{self.laser_index}.png'), self.SIZE), self.ANGLE).convert_alpha()
-		self.hit_image = pygame.transform.rotate(pygame.transform.scale_by(pygame.image.load(f'Images/Explosion/Flash.png'), self.SIZE / 8), self.ANGLE).convert_alpha()
+		self.image = pygame.transform.rotate(pygame.transform.scale_by(self.game.load_img(f'Images/Laser/Laser{self.laser_index}.png'), self.SIZE), self.ANGLE).convert_alpha()
+		self.hit_image = pygame.transform.rotate(pygame.transform.scale_by(self.game.load_img(f'Images/Explosion/Flash.png'), self.SIZE / 8), self.ANGLE).convert_alpha()
 		self.mask = pygame.mask.from_surface(self.image)
 
 		self.rect = self.image.get_rect(center = start_pos)
@@ -671,8 +683,8 @@ class Laser(pygame.sprite.Sprite):
 
 	def input(self) -> None:
 
-		if self.pos.y <= 0 - (self.image.get_height() / 2) or self.pos.y >= HEIGHT + (self.image.get_height() / 2): self.kill()
-		if self.pos.x <= 0 - (self.image.get_width() / 2) or self.pos.x >= WIDTH + (self.image.get_width() / 2): self.kill()
+		if self.pos.y <= Y0 - (self.image.get_height() / 2) or self.pos.y >= Y1 + (self.image.get_height() / 2): self.kill()
+		if self.pos.x <= X0 - (self.image.get_width() / 2) or self.pos.x >= X1 + (self.image.get_width() / 2): self.kill()
 
 	def move(self, dt: int | float) -> None:
 
@@ -712,8 +724,8 @@ class Lemonoid(pygame.sprite.Sprite):
 		self.outside_frame_on_spawn = True
 
 		# Images
-		self.og_image = pygame.transform.scale_by(pygame.image.load(f'Images/Lemonoid/Normal/{self.size}.png'), 2.5).convert_alpha()
-		self.particle_images = [pygame.image.load(f'Images/Lemonoid/Break/Particle{i}.png').convert_alpha() for i in range(2)]
+		self.og_image = pygame.transform.scale_by(self.game.load_img(f'Images/Lemonoid/Normal/{self.size}.png'), 2.5).convert_alpha()
+		self.particle_images = [self.game.load_img(f'Images/Lemonoid/Break/Particle{i}.png').convert_alpha() for i in range(2)]
 		self.image = pygame.transform.rotate(self.og_image, self.angle).convert_alpha()
 
 		# Rects, Vectors, Masks, Pos
@@ -734,6 +746,7 @@ class Lemonoid(pygame.sprite.Sprite):
 			self.health_bar = pygame.sprite.GroupSingle(
 				
 				Health_Bar(
+					game = self.game,
 					offset = (0, -50) if self.size == 3 else (0, 0),
 					size = 0.5 if self.size == 3 else (1 / self.size), 
 					parent = self
@@ -756,21 +769,28 @@ class Lemonoid(pygame.sprite.Sprite):
 
 	def render_debug(self) -> None:
 
-		'self.og_image.get_width() * (2 / 3)'
+		diagonal = (WIDTH ** 2 + HEIGHT ** 2) ** 0.5 * 2
 
 		pygame.draw.line(
 			surface = screen, 
 			color = 'Blue', 
 			start_pos = self.pos, 
-			end_pos = (self.pos.x + cos(radians(self.DIRECTION)) * 2000, self.pos.y - sin(radians(self.DIRECTION)) * 2000), 
-			width = 2
+			end_pos = (self.pos.x + cos(radians(self.DIRECTION)) * diagonal, self.pos.y - sin(radians(self.DIRECTION)) * diagonal), 
+			width = round(2 * SCALE)
+		)
+		pygame.draw.line(
+			surface = screen, 
+			color = 'Dark Blue', 
+			start_pos = self.pos, 
+			end_pos = (self.pos.x - cos(radians(self.DIRECTION)) * diagonal, self.pos.y + sin(radians(self.DIRECTION)) * diagonal), 
+			width = round(2 * SCALE)
 		)
 		pygame.draw.line(
 			surface = screen, 
 			color = 'Red', 
 			start_pos = self.pos, 
-			end_pos = (self.pos.x + cos(radians(self.angle)) * self.og_image.get_width() / 2, self.pos.y - sin(radians(self.angle)) * self.og_image.get_width() / 2), 
-			width = 2
+			end_pos = (self.pos.x + cos(radians(self.angle)) * self.og_image.get_width() * (2 / 3), self.pos.y - sin(radians(self.angle)) * self.og_image.get_width() * (2 / 3)), 
+			width = round(2 * SCALE)
 		)
 
 	def render_health_bar(self) -> None:
@@ -838,13 +858,13 @@ class Lemonoid(pygame.sprite.Sprite):
 
 	def wrap_around(self) -> None:
 
-		if self.pos.x > WIDTH + self.image.get_width() / 2: self.pos.x = 0 - self.image.get_width() / 2
-		elif self.pos.x < 0 - self.image.get_width() / 2: self.pos.x = WIDTH + self.image.get_width() / 2
-		if self.pos.y > HEIGHT + self.image.get_height() / 2: self.pos.y = 0 - self.image.get_height() / 2
-		elif self.pos.y < 0 - self.image.get_height() / 2: self.pos.y = HEIGHT + self.image.get_height() / 2
+		if self.pos.x >= X1 + self.og_image.get_width() / 2: self.pos.x = X0 - self.og_image.get_width() / 2
+		elif self.pos.x <= X0 - self.og_image.get_width() / 2: self.pos.x = X1 + self.og_image.get_width() / 2
+		elif self.pos.y >= Y1 + self.og_image.get_width() / 2: self.pos.y = Y0 - self.og_image.get_width() / 2
+		elif self.pos.y <= Y0 - self.og_image.get_width() / 2: self.pos.y = Y1 + self.og_image.get_width() / 2
 
 	def check_outside_frame(self) -> bool:
-		return ((self.pos.x > WIDTH + self.image.get_width() / 2) or (self.pos.x < 0 - self.image.get_width() / 2) or (self.pos.y > HEIGHT + self.image.get_height() / 2) or (self.pos.y < 0 - self.image.get_height() / 2))
+		return ((self.pos.x >= X1 + self.og_image.get_width() / 2) or (self.pos.x <= X0 - self.og_image.get_width() / 2) or (self.pos.y >= Y1 + self.og_image.get_width() / 2) or (self.pos.y <= Y0 - self.og_image.get_width() / 2))
 
 	def death_animation(self, size: int | float) -> None:
 
@@ -986,7 +1006,7 @@ class Explosion(pygame.sprite.Sprite):
 
 		if type == 1:
 
-			self.og_image = pygame.transform.scale_by(pygame.image.load(f'Images/Explosion/Flash.png'), 0.25).convert_alpha()
+			self.og_image = pygame.transform.scale_by(self.game.load_img(f'Images/Explosion/Flash.png'), 0.25).convert_alpha()
 
 		self.image = self.og_image if type == 1 else self.frames[self.frame_index] 
 		self.rect = self.image.get_rect(center = pos)
@@ -1013,10 +1033,11 @@ class Explosion(pygame.sprite.Sprite):
 
 class Health_Bar(pygame.sprite.Sprite):
 
-	def __init__(self, offset: tuple, size: int | float, parent: object, type: str = 'Base') -> None:
+	def __init__(self, game: Game, offset: tuple, size: int | float, parent: object, type: str = 'Base') -> None:
 
 		super().__init__()
 
+		self.game = game
 		self.SIZE = size
 		self.TYPE = type
 		self.OFFSET = offset
@@ -1031,13 +1052,13 @@ class Health_Bar(pygame.sprite.Sprite):
 			self.health = self.parent.health
 			self.health_percent = self.health / self.MAX_HEALTH
 
-			self.image = pygame.transform.scale_by(pygame.image.load(f'Images/Health Bar/Base.png'), self.SIZE).convert_alpha()
+			self.image = pygame.transform.scale_by(self.game.load_img(f'Images/Health Bar/Base.png'), self.SIZE).convert_alpha()
 			self.rect = self.image.get_rect(center = (self.parent.pos.x + self.OFFSET[0], self.parent.pos.y + self.OFFSET[1]))
 			self.pos = pygame.math.Vector2(self.rect.center)
-			self.segment = pygame.sprite.GroupSingle(Health_Bar(size = self.SIZE, offset = self.OFFSET, parent = self, type = 'Child'))
+			self.segment = pygame.sprite.GroupSingle(Health_Bar(game = self.game, size = self.SIZE, offset = self.OFFSET, parent = self, type = 'Child'))
 
 			# Text
-			self.font = pygame.font.Font('Fonts/pixel_font.ttf', 15)
+			self.font = pygame.font.Font('Fonts/pixel_font.ttf', int(15 * SCALE))
 			self.font.set_bold(True)
 
 			self.text = None
@@ -1048,8 +1069,8 @@ class Health_Bar(pygame.sprite.Sprite):
 
 		if self.TYPE == 'Child':
 
-			self.full_image = pygame.transform.scale_by(pygame.image.load('Images/Health Bar/Full.png'), self.SIZE).convert_alpha()
-			self.empty_image = pygame.transform.scale_by(pygame.image.load('Images/Health Bar/Empty.png'), self.SIZE).convert_alpha()
+			self.full_image = pygame.transform.scale_by(self.game.load_img('Images/Health Bar/Full.png'), self.SIZE).convert_alpha()
+			self.empty_image = pygame.transform.scale_by(self.game.load_img('Images/Health Bar/Empty.png'), self.SIZE).convert_alpha()
 			self.images = [self.full_image, self.empty_image]
 			self.image_index = 0
 
@@ -1154,8 +1175,8 @@ class Particle(pygame.sprite.Sprite):
 
 	def input(self) -> None:
 
-		if self.pos.y <= 0 - (self.image.get_height() / 2) or self.pos.y >= HEIGHT + (self.image.get_height() / 2): self.kill()
-		if self.pos.x <= 0 - (self.image.get_width() / 2) or self.pos.x >= WIDTH + (self.image.get_width() / 2): self.kill()
+		if self.pos.y <= Y0 - (self.image.get_height() / 2) or self.pos.y >= Y1 + (self.image.get_height() / 2): self.kill()
+		if self.pos.x <= X0 - (self.image.get_width() / 2) or self.pos.x >= X1 + (self.image.get_width() / 2): self.kill()
 
 	def move(self, dt: int | float) -> None:
 
@@ -1177,18 +1198,18 @@ class Particle(pygame.sprite.Sprite):
 
 class Life_Count_Meter(pygame.sprite.Sprite):
 
-	def __init__(self, origin: tuple, index: int, ship: dict['index': int, 'max_lives': int | None] = None) -> None:
+	def __init__(self, game: Game, origin: tuple, index: int, ship: dict['index': int, 'max_lives': int | None] = None) -> None:
 
 		super().__init__()
 
-		self.TYPE = type
+		self.game = game
 		self.SIZE = 4
 		self.OFFSET = 10
 		self.INDEX = index
 		self.ORIGIN = origin
 		self.ship = ship
 
-		self.image = pygame.transform.rotate(pygame.transform.scale_by(pygame.image.load(f'Images/UI/Life Count Meter/Ship{self.ship['index']}.png'), self.SIZE), 90).convert_alpha()
+		self.image = pygame.transform.rotate(pygame.transform.scale_by(self.game.load_img(f'Images/UI/Life Count Meter/Ship{self.ship['index']}.png'), self.SIZE), 90).convert_alpha()
 		self.rect = self.image.get_rect(center = (self.ORIGIN[0] - (((self.image.get_width() + self.OFFSET) * (self.ship['max_lives'] - 1)) / 2), self.ORIGIN[1]))
 		self.pos = pygame.math.Vector2(self.rect.center)
 
@@ -1202,6 +1223,12 @@ class Life_Count_Meter(pygame.sprite.Sprite):
 def main() -> None:
 
 	game = Game(
+		screen = {
+			'scale': SCALE,
+		},
+		game = {
+			'debug': DEBUG,
+		},
 		audio = {
 			'sfx_vol': SFX_VOL,
 			'music_vol': MUSIC_VOL
@@ -1270,6 +1297,17 @@ def main() -> None:
 		screen.fill(BG_COLOUR)
 
 		if game.get_state() == game.STATES['play']:
+
+			# Debug
+			if game.DEBUG: 
+
+				pygame.draw.line(screen, DARK_GREY, (X0, CENTER_Y), (X1, CENTER_Y), 1)
+				pygame.draw.line(screen, DARK_GREY, (CENTER_X, Y0), (CENTER_X, Y1), 1)
+			
+				pygame.draw.line(screen, DARK_GREY, (CENTER_X - 10, CENTER_Y), (CENTER_X + 10, CENTER_Y), round(3 * SCALE))
+				pygame.draw.line(screen, DARK_GREY, (CENTER_X, CENTER_Y - 10), (CENTER_X, CENTER_Y + 10), round(3 * SCALE))
+
+				pygame.draw.polygon(screen, DARK_GREY, [(X0, Y0), (X0 + WIDTH, Y0), (X0 + WIDTH, Y0 + HEIGHT), (X0, Y0 + HEIGHT)], 1)
 
 			# Game
 			game.update()

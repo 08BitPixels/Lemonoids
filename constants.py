@@ -1,9 +1,16 @@
-# Screen Dimensions
-WIDTH, HEIGHT = 1000, 750
-CENTER_X, CENTER_Y = WIDTH / 2, HEIGHT / 2
+# Screen Setup
+WINDOW_W, WINDOW_H = 1000, 750
+CENTER_X, CENTER_Y = WINDOW_W / 2, WINDOW_H / 2
+SCALE = 1
+WIDTH, HEIGHT = WINDOW_W * SCALE, WINDOW_H * SCALE
+X0 = CENTER_X - (WINDOW_W / 2) * SCALE
+Y0 = CENTER_Y - (WINDOW_H / 2) * SCALE
+X1 = CENTER_X + (WINDOW_W / 2) * SCALE
+Y1 = CENTER_Y + (WINDOW_H / 2) * SCALE
 
-# FPS
+# Game
 FPS = 144
+DEBUG = False
 
 # Colours
 BG_COLOUR = '#101010'
@@ -14,6 +21,7 @@ WHITE = '#ffffff'
 GREEN = '#33ff00'
 YELLOW = '#ffea00'
 RED = '#ff2600'
+DARK_RED = '#801300'
 
 # Audio (0-1; 0 = off, 1 = full volume)
 SFX_VOL = 1
