@@ -10,7 +10,6 @@ from constants import *
 
 # TO DO
 # -------------------
-# - Health Bar non existent on death
 # - Issues w/ 'first collision' system
 # - Text Shadow
 # - Ship 2 + 3
@@ -94,7 +93,7 @@ class Game:
 		self.player = pygame.sprite.GroupSingle(Player(game = self))
 		self.cursor = Cursor(game = self)
 		self.lemonoids = pygame.sprite.Group()
-		for i in range(1): self.lemonoids.add(Lemonoid(angle = randint(0, 360), move_speed = 75, size = 1, game = self))
+		for i in range(3): self.lemonoids.add(Lemonoid(angle = randint(0, 360), move_speed = 75, size = 1, game = self))
 		self.explosions = pygame.sprite.Group()
 		self.text = Text(game = self)
 		self.particles = pygame.sprite.Group()
@@ -142,6 +141,22 @@ class Game:
 
 	def shake(self, offset: tuple) -> None:
 		self.shake_offset = (self.shake_offset[0] * offset[0], self.shake_offset[1] * offset[1])
+
+	def add_shake_offsets(self, velocity: int) -> None:
+
+		self.shake_offset = (cos(self.player.sprite.angle) * 16, sin(self.player.sprite.angle) * 16)
+
+		for i in range(velocity): self.shake_offsets.append((1, 1))
+
+		self.shake_offsets.append((-1.8, -1.8))
+		for i in range(velocity): self.shake_offsets.append((1, 1))
+
+		for i in range(16):
+			
+			self.shake_offsets.append((uniform(-0.5, -0.8), uniform(-0.5, -0.8)))
+			for i in range(velocity): self.shake_offsets.append((1, 1))
+
+		self.shake_offsets.append((0, 0))
 
 	def play_sfx(self, sfx: pygame.mixer.Sound) -> None:
 		if self.SFX_VOL > 0: sfx.play()
@@ -552,19 +567,7 @@ class Player(pygame.sprite.Sprite):
 			)
 
 		# Shake
-		self.game.shake_offset = (cos(self.angle) * 16, sin(self.angle) * 16)
-
-		for i in range(self.EXPLOSION_SHAKE_VEL): self.game.shake_offsets.append((1, 1))
-
-		self.game.shake_offsets.append((-1.8, -1.8))
-		for i in range(self.EXPLOSION_SHAKE_VEL): self.game.shake_offsets.append((1, 1))
-
-		for i in range(16):
-			
-			self.game.shake_offsets.append((uniform(-0.5, -0.8), uniform(-0.5, -0.8)))
-			for i in range(self.EXPLOSION_SHAKE_VEL): self.game.shake_offsets.append((1, 1))
-
-		self.game.shake_offsets.append((0, 0))
+		self.game.add_shake_offsets(velocity = self.EXPLOSION_SHAKE_VEL)
 		self.game.play_sfx(self.death_sfx)
 		
 		self.death_time = pygame.time.get_ticks()
@@ -635,7 +638,7 @@ class Player(pygame.sprite.Sprite):
 		self.death_time = 0
 		self.blink_index = 0
 		self.health = self.MAX_HEALTH
-		self.health_bar = pygame.sprite.GroupSingle(Health_Bar(offset = (0, -40), size = 0.75, parent = self))
+		self.health_bar = pygame.sprite.GroupSingle(Health_Bar(game = self.game, offset = (0, -40), size = 0.75, parent = self))
 		pygame.time.set_timer(self.BLINK_TIMER, self.BLINK_FREQUENCY, 6)
 
 	def reset(self) -> None:
@@ -818,7 +821,6 @@ class Lemonoid(pygame.sprite.Sprite):
 
 			else: self.colliding['laser'] = False
 		
-		'''
 		# Other Lemonoid Collisions
 		other_lemonoids = self.game.lemonoids.copy()
 		other_lemonoids.remove(self)
@@ -842,7 +844,6 @@ class Lemonoid(pygame.sprite.Sprite):
 				
 				if self.colliding_first: self.colliding_first == False
 				self.colliding['lemonoid'] = False
-		'''
 
 	def move(self, dt: float | int) -> None:
 
@@ -869,21 +870,7 @@ class Lemonoid(pygame.sprite.Sprite):
 	def death_animation(self, size: int | float) -> None:
 
 		# Shake
-		if size == 1:
-
-			self.game.shake_offset = (cos(self.game.player.sprite.angle) * 16, sin(self.game.player.sprite.angle) * 16)
-
-			for i in range(self.EXPLOSION_SHAKE_VEL): self.game.shake_offsets.append((1, 1))
-
-			self.game.shake_offsets.append((-1.8, -1.8))
-			for i in range(self.EXPLOSION_SHAKE_VEL): self.game.shake_offsets.append((1, 1))
-
-			for i in range(16):
-				
-				self.game.shake_offsets.append((uniform(-0.5, -0.8), uniform(-0.5, -0.8)))
-				for i in range(self.EXPLOSION_SHAKE_VEL): self.game.shake_offsets.append((1, 1))
-
-			self.game.shake_offsets.append((0, 0))
+		if size == 1: self.game.add_shake_offsets(velocity = self.EXPLOSION_SHAKE_VEL)
 
 		# Explosion
 		self.game.explosions.add(
@@ -953,7 +940,7 @@ class Lemonoid(pygame.sprite.Sprite):
 
 				)
 			
-		if self.health <= 0: self.death(add_score)
+		if self.health <= 0: self.death(add_score = add_score)
 
 	def death(self, add_score: bool =  True) -> None:
 
@@ -974,9 +961,9 @@ class Lemonoid(pygame.sprite.Sprite):
 
 				)
 
-				# Delete Heath Bar
-				self.health_bar.sprite.segment.empty()
-				self.health_bar.empty()
+			# Delete Heath Bar
+			self.health_bar.sprite.segment.empty()
+			self.health_bar.empty()
 
 		# Score, Animation, SFX
 		if self.size == 1: self.game.play_sfx(self.explosion_sfx)
