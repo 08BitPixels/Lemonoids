@@ -7,15 +7,15 @@ from math import atan2, cos, sin, degrees, radians, pi
 from random import randint, uniform, choice
 
 from constants import *
-# Testing GPG Signing
+
 # TO DO
 # -------------------
-# - Issues w/ 'first collision' system
 # - Text Shadow
 # - Ship 2 + 3
 # - Game Over Screen
 # 	- Previous Scores
 # - Menu Screen
+# - Resizable Screen
 
 # PYGAME SETUP
 pygame.init()
@@ -725,6 +725,7 @@ class Lemonoid(pygame.sprite.Sprite):
 		self.colliding_first = False
 		self.first_frame = True
 		self.outside_frame_on_spawn = True
+		self.dead = False
 
 		# Images
 		self.og_image = pygame.transform.scale_by(self.game.load_img(f'Images/Lemonoid/Normal/{self.size}.png'), 2.5).convert_alpha()
@@ -768,7 +769,7 @@ class Lemonoid(pygame.sprite.Sprite):
 		self.input()
 
 		if self.outside_frame_on_spawn and not self.check_outside_frame(): self.outside_frame_on_spawn = False
-		if self.first_frame == True: self.first_frame == False
+		if self.first_frame: self.first_frame = False
 
 	def render_debug(self) -> None:
 
@@ -831,18 +832,18 @@ class Lemonoid(pygame.sprite.Sprite):
 
 			if collided_lemonoids and not self.colliding['lemonoid']:
 
-				if self.first_frame: self.colliding_first == True
+				if self.first_frame: self.colliding_first = True
 
 				if not self.colliding_first: 
 					
 					self.hit(relative_collision_pos = pygame.sprite.collide_mask(self, collided_lemonoids[0]), damage = 4 - (collided_lemonoids[0].size - 1), object_type = 'lemonoid', add_score = False)
-					collided_lemonoids[0].hit(relative_collision_pos = pygame.sprite.collide_mask(self, collided_lemonoids[0]), damage = 4 - (self.size - 1), object_type = 'lemonoid')
+					collided_lemonoids[0].hit(relative_collision_pos = pygame.sprite.collide_mask(self, collided_lemonoids[0]), damage = 4 - (self.size - 1), object_type = 'lemonoid', add_score = False)
 				
 					self.colliding['lemonoid'] = True
 
 			else:
 				
-				if self.colliding_first: self.colliding_first == False
+				if self.colliding_first: self.colliding_first = False
 				self.colliding['lemonoid'] = False
 
 	def move(self, dt: float | int) -> None:
@@ -939,8 +940,8 @@ class Lemonoid(pygame.sprite.Sprite):
 					)
 
 				)
-			
-		if self.health <= 0: self.death(add_score = add_score)
+
+		if self.health <= 0 and not self.dead: self.death(add_score = add_score)
 
 	def death(self, add_score: bool =  True) -> None:
 
@@ -972,6 +973,7 @@ class Lemonoid(pygame.sprite.Sprite):
 		if add_score: self.game.add_score(self.SCORES[self.size])
 		self.death_animation(self.size)
 		self.kill()
+		self.dead = True
 
 class Explosion(pygame.sprite.Sprite):
 
