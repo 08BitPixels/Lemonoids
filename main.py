@@ -8,15 +8,6 @@ from random import randint, uniform, choice
 
 from constants import *
 
-# TO DO
-# -------------------
-# - Text Shadow
-# - Ship 2 + 3
-# - Game Over Screen
-# 	- Previous Scores
-# - Menu Screen
-# - Resizable Screen
-
 # PYGAME SETUP
 pygame.init()
 screen = pygame.display.set_mode((WINDOW_W, WINDOW_H))
