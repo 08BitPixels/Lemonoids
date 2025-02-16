@@ -1,3 +1,10 @@
+def splashscreen_size(img_size: tuple[int | float, int | float], screen_size: tuple[int, int]) -> tuple[float, float]:
+
+	if img_size[0] > screen_size[0]: img_size = (screen_size[0], (screen_size[0] / img_size[0]) * img_size[1])
+	if img_size[1] > screen_size[1]: img_size = ((screen_size[1] / img_size[1]) * img_size[0], screen_size[1]) 
+
+	return img_size
+
 # Screen Setup
 WINDOW_W, WINDOW_H = 1000, 750
 CENTER_X, CENTER_Y = WINDOW_W / 2, WINDOW_H / 2
@@ -10,7 +17,7 @@ Y1 = CENTER_Y + (WINDOW_H / 2) * SCALE
 
 # Game
 FPS = 144
-DEBUG = False
+DEBUG = True
 
 # Colours
 BG_COLOUR = '#101010'
